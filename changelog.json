@@ -1,0 +1,18 @@
+[
+  {
+    "version": "1.0.0",
+    "buildNumber": 1,
+    "releaseDate": "2026-06-10",
+    "releaseNotes": [
+      "折多多首个版本发布",
+      "支持商品折扣优惠记录管理（增删改查）",
+      "集成 AI 对话功能，支持多种协议 (OpenAI Responses / Chat / Anthropic / GitHub Copilot)",
+      "本地备份与导入导出",
+      "WebDAV / COS / OSS 云同步",
+      "图片解析为结构化 YAML 数据",
+      "多主题模式（跟随系统 / 亮色 / 暗色）"
+    ],
+    "downloadUrl": "https://github.com/user/repo/releases/latest",
+    "updateRequired": false
+  }
+]

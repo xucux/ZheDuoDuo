@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>折多多 · APP 原型</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/tailwind-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+</head>
+<body class="bg-slate-100 min-h-screen">
+<div id="app">
+  <!-- 顶部控制栏 -->
+  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200 px-4 py-3">
+    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-brand flex items-center justify-center text-white font-bold text-sm">折</div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-800">折多多 APP 原型</h1>
+          <p class="text-xs text-slate-500">375×812 · Vue3 交互 · 酷安绿主题</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button @click="viewMode = 'interactive'" :class="viewMode==='interactive' ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600'" class="px-3 py-1.5 rounded-lg text-sm font-medium transition">交互演示</button>
+        <button @click="viewMode = 'overview'" :class="viewMode==='overview' ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600'" class="px-3 py-1.5 rounded-lg text-sm font-medium transition">原型总览</button>
+        <button @click="toggleTheme" class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition">
+          <i :class="settings.theme === 'dark' ? 'fa-sun' : 'fa-moon'" class="fa-solid"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 交互演示模式 -->
+  <main v-show="viewMode === 'interactive'" class="flex justify-center py-8 px-4">
+    <div class="relative">
+      <!-- 手机外壳 -->
+      <div class="phone-device w-[375px] h-[812px] rounded-phone shadow-phone overflow-hidden relative flex flex-col" :data-theme="settings.theme">
+        <!-- 状态栏 -->
+        <div class="h-11 shrink-0 flex items-end justify-between px-6 pb-1 text-[11px] font-medium text-ink bg-[var(--statusbar)]">
+          <span>9:41</span>
+          <div class="flex items-center gap-1.5">
+            <i class="fa-solid fa-signal text-[10px]"></i>
+            <i class="fa-solid fa-wifi text-[10px]"></i>
+            <i class="fa-solid fa-battery-full text-[10px]"></i>
+          </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="phone-screen flex-1 min-h-0 overflow-hidden relative">
+          <input ref="aiSessionInput" type="file" accept="application/json,.json" class="hidden" @change="handleAiSessionImport" />
+          <!-- ===== 清单 Tab ===== -->
+          <div v-show="currentScreen === 'list' && activeTab === 0" class="h-full flex flex-col">
+            <div class="px-4 pt-2 pb-3 bg-[var(--surface)] border-b border-[var(--border)]">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h2 class="text-xl font-bold text-ink">优惠清单</h2>
+                  <p class="text-[11px] text-ink-muted mt-0.5">{{ activeTimeRangeLabel }} · {{ filteredDeals.length }} 条</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button @click="toggleListDisplayMode" :class="settings.listDisplayMode === 'simple' ? 'bg-brand-tint text-brand' : 'bg-surface-2 text-ink-secondary'" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface-3 transition" :title="settings.listDisplayMode === 'simple' ? '简单展示' : '正常展示'">
+                    <i :class="settings.listDisplayMode === 'simple' ? 'fa-solid fa-bars-staggered' : 'fa-solid fa-table-cells-large'" class="text-sm"></i>
+                  </button>
+                  <button @click="goTo('search')" class="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center text-ink-secondary hover:bg-surface-3 transition">
+                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                  </button>
+                  <button @click="showFilterSheet = true" class="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center text-ink-secondary hover:bg-surface-3 transition">
+                    <i class="fa-solid fa-sliders text-sm"></i>
+                  </button>
+                </div>
+              </div>
+              <!-- 快捷筛选标签 -->
+              <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                <button v-for="tag in quickFilters" :key="tag.key" @click="toggleQuickFilter(tag.key)"
+                  :class="activeQuickFilter === tag.key ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'"
+                  class="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition">
+                  {{ tag.label }}
+                </button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-3" :class="settings.listDisplayMode === 'simple' ? 'space-y-1' : 'space-y-3'">
+              <div v-if="filteredDeals.length === 0" class="flex flex-col items-center justify-center h-48 text-ink-muted">
+                <i class="fa-solid fa-tags text-4xl mb-3 opacity-30"></i>
+                <p class="text-sm">{{ deals.length ? '当前时间范围内暂无记录' : '暂无优惠记录' }}</p>
+                <button v-if="deals.length && settings.filterTimeRange !== 'all'" @click="setFilterTimeRange('all')" class="mt-2 text-brand text-xs font-medium">查看全部时间</button>
+                <button @click="openDealForm()" class="mt-3 text-brand text-sm font-medium">+ 添加第一条</button>
+              </div>
+              <div v-for="deal in filteredDeals" :key="deal.id" @click="openDealDetail(deal)"
+                :class="settings.listDisplayMode === 'simple' ? 'rounded-lg' : 'rounded-2xl'"
+                class="bg-[var(--surface)] overflow-hidden shadow-card active:scale-[.98] transition-transform cursor-pointer">
+                <!-- 正常展示 -->
+                <template v-if="settings.listDisplayMode !== 'simple'">
+                  <div class="p-3">
+                    <div class="flex items-start justify-between gap-2">
+                      <h3 class="font-semibold text-ink text-sm line-clamp-2 leading-snug flex-1">{{ deal.title }}</h3>
+                      <span :class="visualBadgeClass(deal)" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                        <i :class="visualBadgeIcon(deal)" class="text-[9px]"></i>{{ visualBadgeText(deal) }}
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-tint text-brand font-medium">{{ deal.platform }}</span>
+                      <span v-for="t in (deal.tags || []).slice(0,2)" :key="t" class="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-ink-muted">{{ t }}</span>
+                      <span v-if="deal.coupons?.length" class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600">
+                        <i class="fa-solid fa-ticket mr-0.5"></i>{{ deal.coupons.length }} 张券
+                      </span>
+                    </div>
+                    <div class="flex items-baseline gap-2 mt-2">
+                      <span class="text-brand font-bold text-lg">¥{{ deal.currentPrice }}</span>
+                      <span v-if="deal.originalPrice" class="text-ink-muted text-xs line-through">¥{{ deal.originalPrice }}</span>
+                      <span class="text-brand text-xs font-medium">{{ deal.discount }}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between px-3 py-2 border-t border-[var(--border)] bg-surface-2/50">
+                    <span class="text-[11px] text-ink-muted"><i class="fa-regular fa-calendar mr-1"></i>{{ deal.createdAt }}</span>
+                    <div class="flex gap-1" @click.stop>
+                      <button @click="openDealForm(deal)" class="w-7 h-7 rounded-lg flex items-center justify-center text-ink-secondary hover:bg-surface-3"><i class="fa-solid fa-pen text-xs"></i></button>
+                      <button @click="confirmDelete(deal)" class="w-7 h-7 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-50"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </div>
+                  </div>
+                </template>
+                <!-- 简单展示：标题 + 原价 + 优惠 + 实付（紧凑） -->
+                <template v-else>
+                  <div class="deal-simple">
+                    <h3 class="deal-simple__title">{{ deal.title }}</h3>
+                    <div class="deal-simple__prices">
+                      <span class="deal-simple__original">
+                        <span class="deal-simple__label">原价</span>
+                        <span :class="deal.originalPrice ? 'line-through' : ''">{{ originalPriceText(deal) }}</span>
+                      </span>
+                      <span class="deal-simple__savings">
+                        <span class="deal-simple__label">省</span>{{ savingsText(deal) }}
+                      </span>
+                      <span class="deal-simple__current">
+                        <span class="deal-simple__label">实付</span>{{ settings.currency }}{{ deal.currentPrice }}
+                      </span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <!-- FAB -->
+            <button @click="openDealForm()" class="absolute bottom-4 right-4 w-14 h-14 rounded-full bg-brand text-white shadow-lg flex items-center justify-center text-2xl hover:bg-brand-dark active:scale-95 transition z-10">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
+
+          <!-- ===== 搜索页 ===== -->
+          <div v-show="currentScreen === 'search'" class="h-full flex flex-col bg-page">
+            <div class="px-4 pt-2 pb-3 bg-[var(--surface)] border-b border-[var(--border)]">
+              <div class="flex items-center gap-2">
+                <button @click="goBack()" class="w-9 h-9 rounded-full flex items-center justify-center text-ink-secondary"><i class="fa-solid fa-arrow-left"></i></button>
+                <div class="flex-1 relative">
+                  <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted text-sm"></i>
+                  <input v-model="searchQuery" ref="searchInput" type="search" placeholder="搜索商品、平台、标签..."
+                    class="w-full h-10 pl-9 pr-4 rounded-xl bg-surface-2 text-ink placeholder:text-ink-muted outline-none focus:ring-2 focus:ring-brand/30" />
+                </div>
+                <button v-if="searchQuery" @click="searchQuery=''" class="text-sm text-ink-muted px-1">清除</button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-3">
+              <div v-if="!searchQuery" class="space-y-4">
+                <div>
+                  <p class="text-xs text-ink-muted mb-2 font-medium">最近搜索</p>
+                  <div class="flex flex-wrap gap-2">
+                    <button v-for="h in searchHistory" :key="h" @click="searchQuery=h" class="px-3 py-1.5 rounded-full bg-surface-2 text-ink-secondary text-xs">{{ h }}</button>
+                  </div>
+                </div>
+                <div>
+                  <p class="text-xs text-ink-muted mb-2 font-medium">热门标签</p>
+                  <div class="flex flex-wrap gap-2">
+                    <button v-for="t in ['百亿补贴','限时秒杀','数码','美妆','食品']" :key="t" @click="searchQuery=t" class="px-3 py-1.5 rounded-full bg-brand-tint text-brand text-xs">{{ t }}</button>
+                  </div>
+                </div>
+              </div>
+              <div v-else>
+                <p class="text-xs text-ink-muted mb-3">找到 {{ searchResults.length }} 条结果</p>
+                <div class="space-y-3">
+                  <div v-for="deal in searchResults" :key="deal.id" @click="openDealDetail(deal)"
+                    :class="settings.listDisplayMode === 'simple' ? 'p-2' : 'p-3'"
+                    class="flex gap-2 bg-[var(--surface)] rounded-xl shadow-card cursor-pointer active:scale-[.98] transition items-center">
+                    <div class="flex-1 min-w-0">
+                      <h4 :class="settings.listDisplayMode === 'simple' ? 'text-xs line-clamp-1' : 'text-sm line-clamp-2'" class="font-medium text-ink">{{ deal.title }}</h4>
+                      <template v-if="settings.listDisplayMode === 'simple'">
+                        <p class="deal-simple__search-prices">
+                          <span class="text-ink-muted"><span class="deal-simple__label">原价</span><span :class="deal.originalPrice ? 'line-through' : ''">{{ originalPriceText(deal) }}</span></span>
+                          <span class="text-brand font-semibold">省 {{ savingsText(deal) }}</span>
+                          <span class="text-ink font-semibold">实付 {{ settings.currency }}{{ deal.currentPrice }}</span>
+                        </p>
+                      </template>
+                      <template v-else>
+                        <div class="flex items-center gap-2 mt-1">
+                          <span :class="visualBadgeClass(deal)" class="shrink-0 text-[9px] px-1 py-0.5 rounded">{{ visualBadgeText(deal) }}</span>
+                        </div>
+                        <p class="text-brand font-bold text-sm mt-1">¥{{ deal.currentPrice }} <span v-if="deal.originalPrice" class="text-ink-muted text-xs font-normal line-through">¥{{ deal.originalPrice }}</span></p>
+                      </template>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-ink-muted text-xs shrink-0"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 优惠详情 ===== -->
+          <div v-show="currentScreen === 'detail'" class="h-full flex flex-col bg-page">
+            <div class="px-4 py-3 bg-[var(--surface)] border-b border-[var(--border)] flex items-center justify-between shrink-0">
+              <button @click="goBack()" class="w-9 h-9 rounded-full flex items-center justify-center text-ink-secondary"><i class="fa-solid fa-arrow-left"></i></button>
+              <h3 class="font-semibold text-ink">优惠详情</h3>
+              <div class="flex gap-1">
+                <button @click="openDealForm(selectedDeal)" class="w-9 h-9 rounded-full flex items-center justify-center text-ink-secondary"><i class="fa-solid fa-pen text-sm"></i></button>
+                <button @click="confirmDelete(selectedDeal)" class="w-9 h-9 rounded-full flex items-center justify-center text-red-400"><i class="fa-solid fa-trash text-sm"></i></button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4">
+              <!-- 图片 / ASCII 展示区（仅详情页展示） -->
+              <div v-if="selectedDeal?.visualType === 'image' && selectedDeal?.image" class="mb-4 rounded-2xl overflow-hidden bg-surface-2">
+                <img :src="selectedDeal.image" class="w-full max-h-48 object-contain" />
+                <p v-if="selectedDeal.imageMeta" class="text-[10px] text-ink-muted px-3 py-1.5 border-t border-[var(--border)]">
+                  <i class="fa-solid fa-compress mr-1"></i>已压缩 {{ selectedDeal.imageMeta.compressedSize }} · 原 {{ selectedDeal.imageMeta.originalSize }}
+                </p>
+              </div>
+              <div v-else-if="selectedDeal?.visualType === 'ascii' && selectedDeal?.asciiArt" class="mb-4 p-3 rounded-2xl bg-surface-2 border border-[var(--border)]">
+                <p class="text-[10px] text-ink-muted mb-2"><i class="fa-solid fa-terminal mr-1"></i>ASCII 图</p>
+                <pre class="ascii-art">{{ selectedDeal.asciiArt }}</pre>
+              </div>
+
+              <h2 class="text-lg font-bold text-ink leading-snug">{{ selectedDeal?.title }}</h2>
+              <div class="flex flex-wrap gap-2 mt-3">
+                <span class="text-xs px-2 py-1 rounded-lg bg-brand-tint text-brand font-medium">{{ selectedDeal?.platform }}</span>
+                <span v-for="t in (selectedDeal?.tags || [])" :key="t" class="text-xs px-2 py-1 rounded-lg bg-surface-2 text-ink-secondary">{{ t }}</span>
+              </div>
+              <div class="flex items-baseline gap-3 mt-4">
+                <span class="text-3xl font-bold text-brand">¥{{ selectedDeal?.currentPrice }}</span>
+                <span v-if="selectedDeal?.originalPrice" class="text-ink-muted line-through">¥{{ selectedDeal?.originalPrice }}</span>
+                <span class="text-sm px-2 py-0.5 rounded bg-brand text-white font-medium">{{ selectedDeal?.discount }}</span>
+              </div>
+              <p v-if="selectedDeal?.originalPrice" class="text-sm text-ink-secondary mt-1">节省 ¥{{ (selectedDeal.originalPrice - selectedDeal.currentPrice).toFixed(0) }}</p>
+              <p v-if="selectedDeal?.currentDisplayPrice && selectedDeal.currentDisplayPrice !== selectedDeal.currentPrice" class="text-xs text-ink-muted mt-1">展示价 ¥{{ selectedDeal.currentDisplayPrice }}</p>
+
+              <!-- 促销权益 -->
+              <div v-if="selectedDeal?.promotions?.length" class="mt-4">
+                <p class="text-xs text-ink-muted font-medium mb-2"><i class="fa-solid fa-bullhorn mr-1"></i>促销权益</p>
+                <div class="flex flex-wrap gap-1.5">
+                  <span v-for="(p, i) in selectedDeal.promotions" :key="i" class="text-[11px] px-2 py-1 rounded-lg bg-brand-tint text-brand">{{ p }}</span>
+                </div>
+              </div>
+
+              <!-- 优惠券信息 -->
+              <div v-if="selectedDeal?.coupons?.length" class="mt-5">
+                <p class="text-xs text-ink-muted font-medium mb-2"><i class="fa-solid fa-ticket mr-1"></i>优惠券（{{ selectedDeal.coupons.length }} 张）</p>
+                <div class="space-y-2">
+                  <div v-for="(c, i) in selectedDeal.coupons" :key="i" class="p-3 rounded-xl bg-surface-2 border border-[var(--border)]">
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm font-medium text-ink">{{ c.source || '未命名来源' }}</span>
+                      <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600">{{ c.count || 1 }} 张</span>
+                    </div>
+                    <p v-if="c.strength" class="text-sm text-brand mt-1 font-medium">{{ c.strength }}</p>
+                    <p v-if="c.note" class="text-xs text-ink-muted mt-1">{{ c.note }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-5 space-y-3">
+                <div v-if="selectedDeal?.logistics" class="flex items-center gap-3 p-3 rounded-xl bg-surface-2">
+                  <i class="fa-solid fa-truck text-brand"></i>
+                  <div><p class="text-xs text-ink-muted">物流</p><p class="text-sm text-ink font-medium">{{ selectedDeal.logistics }}</p></div>
+                </div>
+                <div v-if="selectedDeal?.sales?.sold30Days" class="flex items-center gap-3 p-3 rounded-xl bg-surface-2">
+                  <i class="fa-solid fa-chart-line text-brand"></i>
+                  <div><p class="text-xs text-ink-muted">30天销量</p><p class="text-sm text-ink font-medium">{{ selectedDeal.sales.sold30Days }}</p></div>
+                </div>
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-2">
+                  <i class="fa-solid fa-tag text-brand"></i>
+                  <div><p class="text-xs text-ink-muted">分类</p><p class="text-sm text-ink font-medium">{{ selectedDeal?.category }}</p></div>
+                </div>
+                <div v-if="selectedDeal?.note" class="p-3 rounded-xl bg-surface-2">
+                  <p class="text-xs text-ink-muted mb-1">备注</p>
+                  <p class="text-sm text-ink">{{ selectedDeal?.note }}</p>
+                </div>
+                <div v-if="selectedDeal?.link" class="p-3 rounded-xl bg-surface-2">
+                  <p class="text-xs text-ink-muted mb-1">购买链接</p>
+                  <p class="text-sm text-brand break-all">{{ selectedDeal?.link }}</p>
+                </div>
+              </div>
+              <button v-if="selectedDeal?.link" @click="showToast('链接已复制')" class="w-full mt-6 h-12 rounded-xl bg-brand text-white font-semibold flex items-center justify-center gap-2 active:scale-[.98] transition">
+                <i class="fa-solid fa-copy"></i> 复制链接
+              </button>
+            </div>
+          </div>
+
+          <!-- ===== 新建/编辑 ===== -->
+          <div v-show="currentScreen === 'form'" class="h-full flex flex-col bg-page">
+            <div class="px-4 py-3 bg-[var(--surface)] border-b border-[var(--border)] flex items-center justify-between">
+              <button @click="goBack()" class="text-ink-secondary text-sm">取消</button>
+              <h3 class="font-semibold text-ink">{{ editingDeal ? '编辑优惠' : '新建优惠' }}</h3>
+              <button @click="saveDeal" class="text-brand text-sm font-semibold">保存</button>
+            </div>
+            <!-- 模式切换 -->
+            <div v-if="!editingDeal" class="px-4 pt-3 flex gap-2">
+              <button @click="formMode='yaml'" :class="formMode==='yaml' ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'" class="flex-1 h-9 rounded-xl text-xs font-semibold transition">
+                <i class="fa-solid fa-code mr-1"></i>YAML 解析
+              </button>
+              <button @click="formMode='manual'" :class="formMode==='manual' ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'" class="flex-1 h-9 rounded-xl text-xs font-semibold transition">
+                <i class="fa-solid fa-pen mr-1"></i>表单填写
+              </button>
+            </div>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4 space-y-4">
+              <!-- YAML 解析模式 -->
+              <template v-if="formMode === 'yaml' && !editingDeal">
+                <div class="bg-brand-hint border border-brand-tint rounded-xl p-3">
+                  <p class="text-xs text-ink-secondary leading-relaxed"><i class="fa-solid fa-circle-info text-brand mr-1"></i>支持结构化 YAML（product / promotions / prices / source / visual），含促销权益、图片 URL（自动下载压缩）与 ASCII 图。详见 doc/YAML导入格式说明.md</p>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between mb-1.5">
+                    <label class="text-xs text-ink-muted font-medium">YAML 数据 *</label>
+                    <button @click="fillYamlExample" class="text-[11px] text-brand font-medium">填入示例</button>
+                  </div>
+                  <textarea v-model="yamlInput" rows="12" placeholder="title: 商品名称&#10;platform: 京东&#10;currentPrice: 99&#10;..."
+                    class="yaml-editor w-full px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand resize-none"></textarea>
+                </div>
+                <button @click="parseYaml" class="w-full h-11 rounded-xl border border-brand text-brand font-semibold active:scale-[.98] transition">
+                  <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>解析并填充
+                </button>
+                <p v-if="yamlError" class="text-xs text-red-500"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ yamlError }}</p>
+                <p v-if="yamlParsed" class="text-xs text-brand"><i class="fa-solid fa-circle-check mr-1"></i>解析成功，请确认下方信息并保存</p>
+
+                <!-- 视觉内容（YAML 模式：解析区下方，解析后自动填充） -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-2 block">视觉内容（可选）</label>
+                  <div class="flex gap-2 mb-3">
+                    <button v-for="v in visualOptions" :key="'yaml-' + v.value" @click="form.visualType = v.value"
+                      :class="form.visualType === v.value ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'"
+                      class="flex-1 h-8 rounded-lg text-[11px] font-medium transition">{{ v.label }}</button>
+                  </div>
+                  <div v-if="form.visualType === 'image'" class="space-y-2">
+                    <input ref="imageInput" type="file" accept="image/*" class="hidden" @change="handleImageUpload" />
+                    <div class="flex gap-2">
+                      <input v-model="form.imageUrl" placeholder="图片 URL（YAML visual.image_url）" class="flex-1 h-9 px-3 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-ink text-xs outline-none focus:border-brand" />
+                      <button @click="applyImageFromUrl(form.imageUrl)" :disabled="imageDownloading || !form.imageUrl"
+                        class="shrink-0 h-9 px-3 rounded-lg bg-brand text-white text-[11px] font-medium disabled:opacity-50">
+                        {{ imageDownloading ? '下载中…' : '下载压缩' }}
+                      </button>
+                    </div>
+                    <button @click="imageInput?.click()" class="w-full h-24 rounded-xl border-2 border-dashed border-[var(--border)] flex flex-col items-center justify-center text-ink-muted hover:border-brand hover:text-brand transition">
+                      <i class="fa-solid fa-image text-xl mb-1"></i>
+                      <span class="text-xs">{{ form.image ? '重新选择本地图片' : '或选择本地图片' }}</span>
+                    </button>
+                    <div v-if="form.image" class="rounded-xl overflow-hidden bg-surface-2">
+                      <img :src="form.image" class="w-full max-h-32 object-contain" />
+                      <p v-if="form.imageMeta" class="text-[10px] text-ink-muted px-3 py-1.5 border-t border-[var(--border)]">
+                        <i class="fa-solid fa-compress mr-1"></i>压缩后 {{ form.imageMeta.compressedSize }}（原 {{ form.imageMeta.originalSize }}，{{ form.imageMeta.quality }}% 质量）
+                      </p>
+                    </div>
+                  </div>
+                  <div v-if="form.visualType === 'ascii'">
+                    <textarea v-model="form.asciiArt" rows="6" placeholder="/\_/\  (示例 ASCII 猫)&#10;( o.o )&#10; > ^ <"
+                      class="ascii-art w-full px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand resize-none"></textarea>
+                    <p class="text-[10px] text-ink-muted mt-1">可在 YAML 中写 visual.ascii_art，或解析后在此编辑</p>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 表单区（YAML 解析后或手动模式或编辑） -->
+              <template v-if="formMode === 'manual' || editingDeal || yamlParsed">
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">商品名称 *</label>
+                  <input v-model="form.title" placeholder="如：iPhone 15 Pro 256G" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="text-xs text-ink-muted font-medium mb-1.5 block">到手价 *</label>
+                    <input v-model.number="form.currentPrice" type="number" step="0.01" placeholder="1068" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand" />
+                  </div>
+                  <div>
+                    <label class="text-xs text-ink-muted font-medium mb-1.5 block">原价</label>
+                    <input v-model.number="form.originalPrice" type="number" step="0.01" placeholder="1629" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand" />
+                  </div>
+                </div>
+                <div v-if="form.currentDisplayPrice" class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="text-xs text-ink-muted font-medium mb-1.5 block">展示价</label>
+                    <input v-model.number="form.currentDisplayPrice" type="number" step="0.01" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand" />
+                  </div>
+                  <div>
+                    <label class="text-xs text-ink-muted font-medium mb-1.5 block">物流</label>
+                    <input v-model="form.logistics" placeholder="京东物流" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand" />
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="text-xs text-ink-muted font-medium mb-1.5 block">平台</label>
+                    <select v-model="form.platform" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none">
+                      <option v-for="p in platforms" :key="p">{{ p }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="text-xs text-ink-muted font-medium mb-1.5 block">分类</label>
+                    <select v-model="form.category" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none">
+                      <option v-for="c in categories" :key="c">{{ c }}</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">购买链接</label>
+                  <input v-model="form.link" placeholder="https://" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand" />
+                </div>
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">标签（逗号分隔）</label>
+                  <input v-model="form.tagsStr" placeholder="百亿补贴, 限时" class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand" />
+                </div>
+
+                <!-- 促销权益 -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block"><i class="fa-solid fa-bullhorn mr-1"></i>促销权益（每行一项）</label>
+                  <textarea v-model="form.promotionsStr" rows="4" placeholder="PLUS券后预计到手价1068元&#10;领券再减15%&#10;免费安装&#10;9年质保"
+                    class="w-full px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none focus:border-brand resize-none"></textarea>
+                  <p class="text-[10px] text-ink-muted mt-1">YAML 导入时会自动拆分为标签与优惠券，此处保留原始促销文案供详情展示</p>
+                </div>
+
+                <!-- 优惠券 -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs text-ink-muted font-medium"><i class="fa-solid fa-ticket mr-1"></i>优惠券信息</label>
+                    <button @click="addCoupon" class="text-[11px] text-brand font-medium">+ 添加</button>
+                  </div>
+                  <div v-if="!form.coupons.length" class="text-xs text-ink-muted py-3 text-center bg-surface-2 rounded-xl">暂无优惠券，点击添加</div>
+                  <div v-for="(c, i) in form.coupons" :key="i" class="p-3 mb-2 rounded-xl bg-surface-2 border border-[var(--border)] space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-medium text-ink-secondary">优惠券 {{ i + 1 }}</span>
+                      <button @click="removeCoupon(i)" class="text-red-400 text-xs"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                      <div>
+                        <label class="text-[10px] text-ink-muted">张数</label>
+                        <input v-model.number="c.count" type="number" min="1" class="w-full h-9 px-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none" />
+                      </div>
+                      <div class="col-span-2">
+                        <label class="text-[10px] text-ink-muted">来源</label>
+                        <input v-model="c.source" placeholder="店铺券/平台券/直播间" class="w-full h-9 px-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label class="text-[10px] text-ink-muted">优惠力度</label>
+                      <input v-model="c.strength" placeholder="满300减50 / 9折 / 直减100" class="w-full h-9 px-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none" />
+                    </div>
+                    <div>
+                      <label class="text-[10px] text-ink-muted">备注</label>
+                      <input v-model="c.note" placeholder="券码、领取方式等" class="w-full h-9 px-2 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 视觉内容：手动模式 / 编辑时显示（YAML 模式已在解析区下方） -->
+                <div v-if="formMode === 'manual' || editingDeal">
+                  <label class="text-xs text-ink-muted font-medium mb-2 block">视觉内容（可选）</label>
+                  <div class="flex gap-2 mb-3">
+                    <button v-for="v in visualOptions" :key="v.value" @click="form.visualType = v.value"
+                      :class="form.visualType === v.value ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'"
+                      class="flex-1 h-8 rounded-lg text-[11px] font-medium transition">{{ v.label }}</button>
+                  </div>
+                  <div v-if="form.visualType === 'image'" class="space-y-2">
+                    <input ref="imageInput" type="file" accept="image/*" class="hidden" @change="handleImageUpload" />
+                    <div class="flex gap-2">
+                      <input v-model="form.imageUrl" placeholder="图片 URL（YAML image_url）" class="flex-1 h-9 px-3 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-ink text-xs outline-none focus:border-brand" />
+                      <button @click="applyImageFromUrl(form.imageUrl)" :disabled="imageDownloading || !form.imageUrl"
+                        class="shrink-0 h-9 px-3 rounded-lg bg-brand text-white text-[11px] font-medium disabled:opacity-50">
+                        {{ imageDownloading ? '下载中…' : '下载压缩' }}
+                      </button>
+                    </div>
+                    <button @click="imageInput?.click()" class="w-full h-24 rounded-xl border-2 border-dashed border-[var(--border)] flex flex-col items-center justify-center text-ink-muted hover:border-brand hover:text-brand transition">
+                      <i class="fa-solid fa-image text-xl mb-1"></i>
+                      <span class="text-xs">{{ form.image ? '重新选择本地图片' : '或选择本地图片' }}</span>
+                    </button>
+                    <div v-if="form.image" class="rounded-xl overflow-hidden bg-surface-2">
+                      <img :src="form.image" class="w-full max-h-32 object-contain" />
+                      <p v-if="form.imageMeta" class="text-[10px] text-ink-muted px-3 py-1.5 border-t border-[var(--border)]">
+                        <i class="fa-solid fa-compress mr-1"></i>压缩后 {{ form.imageMeta.compressedSize }}（原 {{ form.imageMeta.originalSize }}，{{ form.imageMeta.quality }}% 质量）
+                      </p>
+                    </div>
+                  </div>
+                  <div v-if="form.visualType === 'ascii'">
+                    <textarea v-model="form.asciiArt" rows="6" placeholder="/\_/\  (示例 ASCII 猫)&#10;( o.o )&#10; > ^ <"
+                      class="ascii-art w-full px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand resize-none"></textarea>
+                    <p class="text-[10px] text-ink-muted mt-1">纯文本字符画，列表仅标注「ASCII」</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">备注</label>
+                  <textarea v-model="form.note" rows="2" placeholder="凑单攻略、购买建议等" class="w-full px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink outline-none focus:border-brand resize-none"></textarea>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- ===== AI Tab：对话窗口 ===== -->
+          <div v-show="currentScreen === 'list' && activeTab === 1" class="h-full flex flex-col bg-[var(--surface)]">
+            <!-- 顶部栏 -->
+            <div class="shrink-0 border-b border-[var(--border)] bg-[var(--surface)]">
+              <div class="flex items-center justify-between px-3 py-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <button @click="chatShowSettings = !chatShowSettings" class="w-8 h-8 rounded-lg flex items-center justify-center text-ink-muted hover:bg-surface-2" title="历史会话">
+                    <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                  </button>
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-ink truncate">{{ currentChatSession?.title || 'AI 对话' }}</p>
+                    <p class="text-[10px] text-ink-muted truncate">
+                      {{ settings.aiChat.protocol === 'openai' ? 'OpenAI 兼容' : 'Claude 协议' }}
+                      <span v-if="settings.aiChat.model">· {{ settings.aiChat.model }}</span>
+                    </p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button @click="startNewChat" class="w-8 h-8 rounded-lg flex items-center justify-center text-brand hover:bg-brand-tint" title="新对话">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                  </button>
+                  <button @click="goTo('ai-settings')" class="w-8 h-8 rounded-lg flex items-center justify-center text-ink-muted hover:bg-surface-2" title="更多设置">
+                    <i class="fa-solid fa-sliders text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 会话列表（展开时） -->
+            <div v-if="chatShowSettings" class="shrink-0 border-b border-[var(--border)] bg-surface-2/50">
+              <div class="px-3 py-2 flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-clock-rotate-left text-[10px] text-ink-muted"></i>
+                  <span class="text-xs text-ink-muted font-medium">历史会话</span>
+                </div>
+                <button @click="exportChatBackup" class="text-[10px] text-brand font-medium">导出</button>
+              </div>
+              <div class="px-3 pb-2 space-y-1 max-h-40 overflow-y-auto phone-scroll">
+                <div v-for="s in chatSessions" :key="s.id" @click="selectChatSession(s.id); chatShowSettings = false"
+                  :class="currentChatSessionId === s.id ? 'bg-brand-tint border-brand/30' : 'bg-[var(--surface)] border-[var(--border)]'"
+                  class="flex items-center justify-between px-3 py-2 rounded-xl border text-xs cursor-pointer active:scale-[.98] transition">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <div :class="currentChatSessionId === s.id ? 'bg-brand text-white' : 'bg-surface-3 text-ink-muted'" class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0">
+                      <i class="fa-solid fa-message text-[10px]"></i>
+                    </div>
+                    <div class="min-w-0">
+                      <p :class="currentChatSessionId === s.id ? 'text-brand font-medium' : 'text-ink'" class="truncate">{{ s.title }}</p>
+                      <p class="text-[10px] text-ink-muted truncate">{{ s.messages.length }} 条 · {{ s.updatedAt?.replace('T',' ').slice(0,16) }}</p>
+                    </div>
+                  </div>
+                  <button @click.stop="removeChatSession(s.id)" class="w-6 h-6 rounded-md flex items-center justify-center text-ink-muted hover:text-red-400 hover:bg-red-50 shrink-0 ml-2">
+                    <i class="fa-solid fa-trash text-[10px]"></i>
+                  </button>
+                </div>
+                <div v-if="!chatSessions.length" class="text-[11px] text-ink-muted text-center py-3">暂无会话</div>
+              </div>
+            </div>
+
+            <!-- 消息区 -->
+            <div ref="chatScrollRef" class="flex-1 min-h-0 overflow-y-auto phone-scroll px-3 py-3 space-y-3">
+              <div v-if="!currentChatSession?.messages?.length" class="flex flex-col items-center justify-center h-full text-ink-muted">
+                <div class="w-14 h-14 rounded-2xl bg-brand-tint flex items-center justify-center text-brand text-2xl mb-3">
+                  <i class="fa-solid fa-robot"></i>
+                </div>
+                <p class="text-sm font-medium">开始对话</p>
+                <p class="text-[11px] mt-1">输入问题，AI 将基于你配置的协议回复</p>
+              </div>
+              <div v-for="msg in currentChatSession?.messages" :key="msg.id" :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                <div :class="msg.role === 'user' ? 'bg-brand text-white rounded-2xl rounded-tr-md' : 'bg-surface-2 text-ink rounded-2xl rounded-tl-md'" class="max-w-[85%] px-3.5 py-2.5 text-sm leading-relaxed shadow-sm">
+                  <p class="whitespace-pre-wrap">{{ msg.content }}</p>
+                  <p :class="msg.role === 'user' ? 'text-white/60' : 'text-ink-muted'" class="text-[10px] mt-1 text-right">{{ msg.createdAt?.replace('T',' ').slice(11,16) }}</p>
+                </div>
+              </div>
+              <div v-if="chatSending" class="flex justify-start">
+                <div class="bg-surface-2 text-ink rounded-2xl rounded-tl-md px-3.5 py-2.5 text-sm shadow-sm">
+                  <div class="flex items-center gap-1.5 text-ink-muted">
+                    <i class="fa-solid fa-circle text-[6px] animate-bounce"></i>
+                    <i class="fa-solid fa-circle text-[6px] animate-bounce" style="animation-delay:0.1s"></i>
+                    <i class="fa-solid fa-circle text-[6px] animate-bounce" style="animation-delay:0.2s"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 输入区 -->
+            <div class="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 safe-bottom">
+              <div class="flex items-end gap-2">
+                <textarea v-model="chatInput" rows="1" placeholder="输入消息…" @keydown.enter.prevent="sendChatMessage"
+                  class="flex-1 min-h-[36px] max-h-[120px] px-3 py-2 rounded-xl bg-surface-2 border border-[var(--border)] text-sm text-ink outline-none resize-none focus:border-brand"></textarea>
+                <button @click="sendChatMessage" :disabled="chatSending || !chatInput.trim()"
+                  :class="chatSending || !chatInput.trim() ? 'opacity-50' : ''"
+                  class="w-9 h-9 rounded-xl bg-brand text-white flex items-center justify-center shrink-0 active:scale-95 transition">
+                  <i v-if="!chatSending" class="fa-solid fa-paper-plane text-xs"></i>
+                  <i v-else class="fa-solid fa-spinner fa-spin text-xs"></i>
+                </button>
+              </div>
+              <p class="text-[10px] text-ink-muted text-center mt-1.5">数据仅保存在本地，不会上传至云端或备份</p>
+            </div>
+          </div>
+
+          <!-- ===== 我的 Tab ===== -->
+          <div v-show="currentScreen === 'list' && activeTab === 2" class="h-full flex flex-col bg-page">
+            <div class="px-4 pt-4 pb-6 bg-gradient-to-br from-brand to-brand-dark text-white">
+              <div class="flex items-center gap-3">
+                <div class="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-bold backdrop-blur">折</div>
+                <div>
+                  <h2 class="text-lg font-bold">折多多</h2>
+                  <p class="text-xs text-white/80">v1.0.0 · 本地优先</p>
+                </div>
+              </div>
+              <div class="flex gap-4 mt-4">
+                <div class="flex-1 bg-white/15 rounded-xl p-3 text-center backdrop-blur">
+                  <p class="text-xl font-bold">{{ deals.length }}</p>
+                  <p class="text-[11px] text-white/70">优惠记录</p>
+                </div>
+                <div class="flex-1 bg-white/15 rounded-xl p-3 text-center backdrop-blur">
+                  <p class="text-xl font-bold">{{ couponDealsCount }}</p>
+                  <p class="text-[11px] text-white/70">有优惠券</p>
+                </div>
+              </div>
+            </div>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 -mt-3 space-y-3 pb-4">
+              <div class="bg-[var(--surface)] rounded-2xl overflow-hidden shadow-card">
+                <button @click="goTo('backup')" class="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-surface-2 transition">
+                  <div class="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center"><i class="fa-solid fa-file-zipper text-blue-500"></i></div>
+                  <div class="flex-1 text-left"><p class="text-sm font-medium text-ink">本地备份</p><p class="text-[11px] text-ink-muted">导入/导出压缩包 · 自动备份</p></div>
+                  <i class="fa-solid fa-chevron-right text-ink-muted text-xs"></i>
+                </button>
+                <button @click="goTo('cloud-sync')" class="w-full flex items-center gap-3 px-4 py-3.5 border-t border-[var(--border)] hover:bg-surface-2 transition">
+                  <div class="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center"><i class="fa-solid fa-cloud-arrow-up text-purple-500"></i></div>
+                  <div class="flex-1 text-left"><p class="text-sm font-medium text-ink">云同步</p><p class="text-[11px] text-ink-muted">WebDAV · 腾讯云COS · 阿里云OSS</p></div>
+                  <i class="fa-solid fa-chevron-right text-ink-muted text-xs"></i>
+                </button>
+                <button @click="goTo('ai-settings')" class="w-full flex items-center gap-3 px-4 py-3.5 border-t border-[var(--border)] hover:bg-surface-2 transition">
+                  <div class="w-9 h-9 rounded-xl bg-cyan-500/10 flex items-center justify-center"><i class="fa-solid fa-robot text-cyan-500"></i></div>
+                  <div class="flex-1 text-left"><p class="text-sm font-medium text-ink">AI 设置</p><p class="text-[11px] text-ink-muted">图片解析提示词 · AI 服务 · 会话管理</p></div>
+                  <i class="fa-solid fa-chevron-right text-ink-muted text-xs"></i>
+                </button>
+                <button @click="goTo('settings')" class="w-full flex items-center gap-3 px-4 py-3.5 border-t border-[var(--border)] hover:bg-surface-2 transition">
+                  <div class="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center"><i class="fa-solid fa-gear text-orange-500"></i></div>
+                  <div class="flex-1 text-left"><p class="text-sm font-medium text-ink">系统设置</p><p class="text-[11px] text-ink-muted">主题 · 清单展示 · 排序偏好</p></div>
+                  <i class="fa-solid fa-chevron-right text-ink-muted text-xs"></i>
+                </button>
+              </div>
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card">
+                <p class="text-xs text-ink-muted font-medium mb-2">关于</p>
+                <p class="text-xs text-ink-secondary leading-relaxed">折多多是一款纯本地运行的优惠记录工具，数据存储在设备本地，支持压缩包备份与多云同步，无需注册账号。</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 本地备份 ===== -->
+          <div v-show="currentScreen === 'backup'" class="h-full flex flex-col bg-page">
+            <nav-bar title="本地备份" @back="goBack()"></nav-bar>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4 space-y-4">
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card">
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-sm font-medium text-ink">自动备份</span>
+                  <button @click="settings.autoBackup = !settings.autoBackup" :class="settings.autoBackup ? 'bg-brand' : 'bg-surface-3'" class="w-11 h-6 rounded-full relative transition">
+                    <span :class="settings.autoBackup ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"></span>
+                  </button>
+                </div>
+                <p class="text-xs text-ink-muted">开启后每次数据变更自动导出至本地目录</p>
+              </div>
+              <div class="space-y-2">
+                <button @click="showToast('已导出备份包 zheduoduo_backup.zip')" class="w-full flex items-center gap-3 p-4 bg-[var(--surface)] rounded-2xl shadow-card active:scale-[.98] transition">
+                  <div class="w-10 h-10 rounded-xl bg-brand-tint flex items-center justify-center"><i class="fa-solid fa-download text-brand"></i></div>
+                  <div class="text-left"><p class="text-sm font-medium text-ink">手动导出</p><p class="text-[11px] text-ink-muted">导出全部设置与记录为 .zip</p></div>
+                </button>
+                <button @click="showToast('请选择备份文件导入')" class="w-full flex items-center gap-3 p-4 bg-[var(--surface)] rounded-2xl shadow-card active:scale-[.98] transition">
+                  <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center"><i class="fa-solid fa-upload text-blue-500"></i></div>
+                  <div class="text-left"><p class="text-sm font-medium text-ink">手动导入</p><p class="text-[11px] text-ink-muted">从 .zip 恢复数据（覆盖当前）</p></div>
+                </button>
+              </div>
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card">
+                <p class="text-xs text-ink-muted font-medium mb-3">备份历史</p>
+                <div v-for="b in backupHistory" :key="b.name" class="flex items-center justify-between py-2.5 border-b border-[var(--border)] last:border-0">
+                  <div><p class="text-sm text-ink">{{ b.name }}</p><p class="text-[11px] text-ink-muted">{{ b.date }} · {{ b.size }}</p></div>
+                  <button class="text-brand text-xs">恢复</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 云同步 ===== -->
+          <div v-show="currentScreen === 'cloud-sync'" class="h-full flex flex-col bg-page">
+            <nav-bar title="云同步" @back="goBack()"></nav-bar>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4 space-y-3">
+              <p class="text-xs text-ink-muted px-1">选择同步方式，数据加密后上传至您的私有云存储</p>
+              <button v-for="c in cloudProviders" :key="c.id" @click="goTo(c.screen)"
+                class="w-full flex items-center gap-3 p-4 bg-[var(--surface)] rounded-2xl shadow-card active:scale-[.98] transition">
+                <div :class="c.bg" class="w-10 h-10 rounded-xl flex items-center justify-center"><i :class="c.icon"></i></div>
+                <div class="flex-1 text-left">
+                  <p class="text-sm font-medium text-ink">{{ c.name }}</p>
+                  <p class="text-[11px] text-ink-muted">{{ c.desc }}</p>
+                </div>
+                <span v-if="settings.cloud[c.id]?.enabled" class="text-[10px] px-2 py-0.5 rounded-full bg-brand-tint text-brand">已启用</span>
+                <i class="fa-solid fa-chevron-right text-ink-muted text-xs"></i>
+              </button>
+              <button @click="cloudSyncIncremental('webdav')" class="w-full h-12 rounded-xl bg-brand text-white font-semibold mt-2 active:scale-[.98] transition">
+                <i class="fa-solid fa-arrows-rotate mr-2"></i>立即同步
+              </button>
+            </div>
+          </div>
+
+          <!-- ===== WebDAV 配置 ===== -->
+          <div v-show="currentScreen === 'cloud-webdav'" class="h-full flex flex-col bg-page">
+            <nav-bar title="WebDAV 配置" @back="goBack()"></nav-bar>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4 space-y-4">
+              <!-- 预设提供商 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card">
+                <p class="text-xs text-ink-muted font-medium mb-2">提供商</p>
+                <div class="flex flex-wrap gap-2">
+                  <button v-for="p in WEBDAV_PRESETS" :key="p.id" @click="setWebdavProvider(p.id)"
+                    :class="settings.cloud.webdav.provider === p.id ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'"
+                    class="px-3 py-1.5 rounded-full text-xs font-medium transition">
+                    {{ p.name }}
+                  </button>
+                </div>
+                <p v-if="webdavPreset.tip" class="text-[11px] text-ink-muted mt-3 leading-relaxed">
+                  <i class="fa-solid fa-circle-info text-brand mr-1"></i>{{ webdavPreset.tip }}
+                </p>
+              </div>
+              <!-- 连接信息 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">WebDAV 服务器地址</label>
+                  <input v-model="settings.cloud.webdav.url" :readonly="settings.cloud.webdav.provider !== 'custom'"
+                    :class="settings.cloud.webdav.provider !== 'custom' ? 'bg-surface-2 text-ink-muted' : ''"
+                    placeholder="https://dav.example.com/"
+                    class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                </div>
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">WebDAV 账户</label>
+                  <input v-model="settings.cloud.webdav.username" type="email" placeholder="your@email.com"
+                    class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                </div>
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">WebDAV 密码</label>
+                  <input v-model="settings.cloud.webdav.password" type="password" :placeholder="webdavPreset.passwordPlaceholder"
+                    class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                </div>
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">远程根目录</label>
+                  <input v-model="settings.cloud.webdav.path" placeholder="/zheduoduo/"
+                    class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                </div>
+              </div>
+              <!-- 启用开关 + 保存 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm text-ink">启用同步</p>
+                    <p class="text-[10px] text-ink-muted mt-0.5">开启后使用此 WebDAV 配置</p>
+                  </div>
+                  <button @click="settings.cloud.webdav.enabled = !settings.cloud.webdav.enabled" :class="settings.cloud.webdav.enabled ? 'bg-brand' : 'bg-surface-3'" class="w-11 h-6 rounded-full relative transition">
+                    <span :class="settings.cloud.webdav.enabled ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform"></span>
+                  </button>
+                </div>
+                <div class="flex gap-2 pt-1">
+                  <button @click="testWebdavConnection" class="flex-1 h-10 rounded-xl border border-brand text-brand text-sm font-medium">
+                    <i class="fa-solid fa-link mr-1"></i>测试连接
+                  </button>
+                  <button @click="saveWebdavConfig" class="flex-1 h-10 rounded-xl bg-brand text-white text-sm font-semibold">
+                    <i class="fa-solid fa-floppy-disk mr-1"></i>保存配置
+                  </button>
+                </div>
+                <p v-if="webdavDirty" class="text-center text-[11px] text-amber-600"><i class="fa-solid fa-circle text-[6px] mr-1"></i>配置未保存</p>
+              </div>
+
+              <!-- 增量同步 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fa-solid fa-arrows-rotate text-brand text-sm"></i>
+                  <p class="text-sm font-medium text-ink">增量同步</p>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-tint text-brand">自动</span>
+                </div>
+                <p class="text-[11px] text-ink-muted leading-relaxed">仅同步上次以来的变更数据（changelog + 图片），流量小、速度快。</p>
+                <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                  <div>
+                    <p class="text-sm text-ink">自动同步</p>
+                    <p class="text-[10px] text-ink-muted mt-0.5">保存后自动推送 · 回前台时自动拉取</p>
+                  </div>
+                  <button @click="toggleWebdavAutoSync" :class="settings.cloud.webdav.autoSync ? 'bg-brand' : 'bg-surface-3'" class="w-11 h-6 rounded-full relative transition">
+                    <span :class="settings.cloud.webdav.autoSync ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform"></span>
+                  </button>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-ink-muted">
+                  <span>上次同步：{{ webdavLastSyncText }}</span>
+                </div>
+                <button @click="cloudSyncIncremental('webdav')" class="w-full h-11 rounded-xl bg-brand text-white text-sm font-semibold active:scale-[.98] transition">
+                  <i class="fa-solid fa-arrows-rotate mr-1"></i>立即同步
+                </button>
+              </div>
+
+              <!-- 全量操作 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fa-solid fa-database text-ink-secondary text-sm"></i>
+                  <p class="text-sm font-medium text-ink">全量操作</p>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-3 text-ink-muted">手动</span>
+                </div>
+                <p class="text-[11px] text-ink-muted leading-relaxed">传输完整数据库和所有图片，文件较大，仅建议在以下场景使用：</p>
+                <ul class="text-[11px] text-ink-muted space-y-0.5 ml-3">
+                  <li>• 新设备首次同步</li>
+                  <li>• 本地数据库损坏需要恢复</li>
+                  <li>• 手动导入数据后推送到云端</li>
+                </ul>
+                <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
+                  <button @click="cloudFullUpload('webdav')" class="flex-1 h-11 rounded-xl bg-amber-500 text-white text-sm font-semibold active:scale-[.98] transition">
+                    <i class="fa-solid fa-cloud-arrow-up mr-1"></i>全量上传
+                  </button>
+                  <button @click="cloudFullDownload('webdav')" class="flex-1 h-11 rounded-xl bg-surface-2 text-ink-secondary text-sm font-medium border border-[var(--border)] active:scale-[.98] transition">
+                    <i class="fa-solid fa-cloud-arrow-down mr-1"></i>全量下载
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 腾讯云 COS 配置 ===== -->
+          <div v-show="currentScreen === 'cloud-cos'" class="h-full flex flex-col bg-page">
+            <nav-bar title="腾讯云 COS" @back="goBack()"></nav-bar>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4 space-y-4">
+              <!-- 连接信息 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div v-for="field in cloudConfigScreens[0].fields" :key="field.key">
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">{{ field.label }}</label>
+                  <input v-model="settings.cloud.cos[field.key]" :type="field.type || 'text'" :placeholder="field.placeholder"
+                    class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                </div>
+              </div>
+              <!-- 启用开关 + 保存 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm text-ink">启用同步</p>
+                    <p class="text-[10px] text-ink-muted mt-0.5">开启后使用腾讯云 COS 同步</p>
+                  </div>
+                  <button @click="settings.cloud.cos.enabled = !settings.cloud.cos.enabled" :class="settings.cloud.cos.enabled ? 'bg-brand' : 'bg-surface-3'" class="w-11 h-6 rounded-full relative transition">
+                    <span :class="settings.cloud.cos.enabled ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform"></span>
+                  </button>
+                </div>
+                <div class="flex gap-2 pt-1">
+                  <button @click="showToast('连接测试成功')" class="flex-1 h-10 rounded-xl border border-brand text-brand text-sm font-medium">
+                    <i class="fa-solid fa-link mr-1"></i>测试连接
+                  </button>
+                  <button @click="saveSettings(); showToast('配置已保存')" class="flex-1 h-10 rounded-xl bg-brand text-white text-sm font-semibold">
+                    <i class="fa-solid fa-floppy-disk mr-1"></i>保存配置
+                  </button>
+                </div>
+              </div>
+              <!-- 增量同步 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fa-solid fa-arrows-rotate text-brand text-sm"></i>
+                  <p class="text-sm font-medium text-ink">增量同步</p>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-tint text-brand">自动</span>
+                </div>
+                <p class="text-[11px] text-ink-muted leading-relaxed">仅同步上次以来的变更数据，流量小、速度快。</p>
+                <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                  <div>
+                    <p class="text-sm text-ink">自动同步</p>
+                    <p class="text-[10px] text-ink-muted mt-0.5">保存后自动推送 · 回前台时自动拉取</p>
+                  </div>
+                  <button @click="settings.cloud.cos.autoSync = !settings.cloud.cos.autoSync; saveSettings()" :class="settings.cloud.cos.autoSync ? 'bg-brand' : 'bg-surface-3'" class="w-11 h-6 rounded-full relative transition">
+                    <span :class="settings.cloud.cos.autoSync ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform"></span>
+                  </button>
+                </div>
+                <button @click="cloudSyncIncremental('cos')" class="w-full h-11 rounded-xl bg-brand text-white text-sm font-semibold active:scale-[.98] transition">
+                  <i class="fa-solid fa-arrows-rotate mr-1"></i>立即同步
+                </button>
+              </div>
+              <!-- 全量操作 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fa-solid fa-database text-ink-secondary text-sm"></i>
+                  <p class="text-sm font-medium text-ink">全量操作</p>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-3 text-ink-muted">手动</span>
+                </div>
+                <p class="text-[11px] text-ink-muted leading-relaxed">传输完整数据库和所有图片，文件较大，仅建议在以下场景使用：</p>
+                <ul class="text-[11px] text-ink-muted space-y-0.5 ml-3">
+                  <li>• 新设备首次同步</li>
+                  <li>• 本地数据库损坏需要恢复</li>
+                  <li>• 手动导入数据后推送到云端</li>
+                </ul>
+                <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
+                  <button @click="cloudFullUpload('cos')" class="flex-1 h-11 rounded-xl bg-amber-500 text-white text-sm font-semibold active:scale-[.98] transition">
+                    <i class="fa-solid fa-cloud-arrow-up mr-1"></i>全量上传
+                  </button>
+                  <button @click="cloudFullDownload('cos')" class="flex-1 h-11 rounded-xl bg-surface-2 text-ink-secondary text-sm font-medium border border-[var(--border)] active:scale-[.98] transition">
+                    <i class="fa-solid fa-cloud-arrow-down mr-1"></i>全量下载
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 阿里云 OSS 配置 ===== -->
+          <div v-show="currentScreen === 'cloud-oss'" class="h-full flex flex-col bg-page">
+            <nav-bar title="阿里云 OSS" @back="goBack()"></nav-bar>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4 space-y-4">
+              <!-- 连接信息 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div v-for="field in cloudConfigScreens[1].fields" :key="field.key">
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">{{ field.label }}</label>
+                  <input v-model="settings.cloud.oss[field.key]" :type="field.type || 'text'" :placeholder="field.placeholder"
+                    class="w-full h-11 px-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                </div>
+              </div>
+              <!-- 启用开关 + 保存 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm text-ink">启用同步</p>
+                    <p class="text-[10px] text-ink-muted mt-0.5">开启后使用阿里云 OSS 同步</p>
+                  </div>
+                  <button @click="settings.cloud.oss.enabled = !settings.cloud.oss.enabled" :class="settings.cloud.oss.enabled ? 'bg-brand' : 'bg-surface-3'" class="w-11 h-6 rounded-full relative transition">
+                    <span :class="settings.cloud.oss.enabled ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform"></span>
+                  </button>
+                </div>
+                <div class="flex gap-2 pt-1">
+                  <button @click="showToast('连接测试成功')" class="flex-1 h-10 rounded-xl border border-brand text-brand text-sm font-medium">
+                    <i class="fa-solid fa-link mr-1"></i>测试连接
+                  </button>
+                  <button @click="saveSettings(); showToast('配置已保存')" class="flex-1 h-10 rounded-xl bg-brand text-white text-sm font-semibold">
+                    <i class="fa-solid fa-floppy-disk mr-1"></i>保存配置
+                  </button>
+                </div>
+              </div>
+              <!-- 增量同步 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fa-solid fa-arrows-rotate text-brand text-sm"></i>
+                  <p class="text-sm font-medium text-ink">增量同步</p>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-tint text-brand">自动</span>
+                </div>
+                <p class="text-[11px] text-ink-muted leading-relaxed">仅同步上次以来的变更数据，流量小、速度快。</p>
+                <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                  <div>
+                    <p class="text-sm text-ink">自动同步</p>
+                    <p class="text-[10px] text-ink-muted mt-0.5">保存后自动推送 · 回前台时自动拉取</p>
+                  </div>
+                  <button @click="settings.cloud.oss.autoSync = !settings.cloud.oss.autoSync; saveSettings()" :class="settings.cloud.oss.autoSync ? 'bg-brand' : 'bg-surface-3'" class="w-11 h-6 rounded-full relative transition">
+                    <span :class="settings.cloud.oss.autoSync ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform"></span>
+                  </button>
+                </div>
+                <button @click="cloudSyncIncremental('oss')" class="w-full h-11 rounded-xl bg-brand text-white text-sm font-semibold active:scale-[.98] transition">
+                  <i class="fa-solid fa-arrows-rotate mr-1"></i>立即同步
+                </button>
+              </div>
+              <!-- 全量操作 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-3">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fa-solid fa-database text-ink-secondary text-sm"></i>
+                  <p class="text-sm font-medium text-ink">全量操作</p>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-3 text-ink-muted">手动</span>
+                </div>
+                <p class="text-[11px] text-ink-muted leading-relaxed">传输完整数据库和所有图片，文件较大，仅建议在以下场景使用：</p>
+                <ul class="text-[11px] text-ink-muted space-y-0.5 ml-3">
+                  <li>• 新设备首次同步</li>
+                  <li>• 本地数据库损坏需要恢复</li>
+                  <li>• 手动导入数据后推送到云端</li>
+                </ul>
+                <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
+                  <button @click="cloudFullUpload('oss')" class="flex-1 h-11 rounded-xl bg-amber-500 text-white text-sm font-semibold active:scale-[.98] transition">
+                    <i class="fa-solid fa-cloud-arrow-up mr-1"></i>全量上传
+                  </button>
+                  <button @click="cloudFullDownload('oss')" class="flex-1 h-11 rounded-xl bg-surface-2 text-ink-secondary text-sm font-medium border border-[var(--border)] active:scale-[.98] transition">
+                    <i class="fa-solid fa-cloud-arrow-down mr-1"></i>全量下载
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 系统设置 ===== -->
+          <div v-show="currentScreen === 'settings'" class="h-full flex flex-col bg-page">
+            <nav-bar title="系统设置" @back="goBack()"></nav-bar>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4 space-y-4">
+              <!-- 主题 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card">
+                <p class="text-xs text-ink-muted font-medium mb-3">外观主题</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <button @click="setTheme('light')" :class="settings.theme === 'light' ? 'ring-2 ring-brand border-brand' : 'border-[var(--border)]'" class="p-3 rounded-xl border-2 bg-white text-center transition">
+                    <i class="fa-solid fa-sun text-amber-400 text-xl mb-1"></i>
+                    <p class="text-sm font-medium text-slate-800">亮色</p>
+                  </button>
+                  <button @click="setTheme('dark')" :class="settings.theme === 'dark' ? 'ring-2 ring-brand border-brand' : 'border-[var(--border)]'" class="p-3 rounded-xl border-2 bg-slate-900 text-center transition">
+                    <i class="fa-solid fa-moon text-blue-300 text-xl mb-1"></i>
+                    <p class="text-sm font-medium text-white">暗色</p>
+                  </button>
+                </div>
+              </div>
+              <!-- 清单展示 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card">
+                <p class="text-xs text-ink-muted font-medium mb-3">清单展示模式</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <button @click="setListDisplayMode('normal')" :class="settings.listDisplayMode === 'normal' ? 'ring-2 ring-brand border-brand' : 'border-[var(--border)]'" class="p-3 rounded-xl border-2 text-center transition bg-surface-2">
+                    <i class="fa-solid fa-table-cells-large text-lg text-brand mb-1"></i>
+                    <p class="text-sm font-medium text-ink">正常</p>
+                    <p class="text-[10px] text-ink-muted mt-0.5">平台·标签·折扣</p>
+                  </button>
+                  <button @click="setListDisplayMode('simple')" :class="settings.listDisplayMode === 'simple' ? 'ring-2 ring-brand border-brand' : 'border-[var(--border)]'" class="p-3 rounded-xl border-2 text-center transition bg-surface-2">
+                    <i class="fa-solid fa-bars-staggered text-lg text-brand mb-1"></i>
+                    <p class="text-sm font-medium text-ink">简单</p>
+                    <p class="text-[10px] text-ink-muted mt-0.5">标题·原价·优惠·实付</p>
+                  </button>
+                </div>
+              </div>
+              <!-- 其他设置 -->
+              <div class="bg-[var(--surface)] rounded-2xl overflow-hidden shadow-card">
+                <div class="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+                  <span class="text-sm text-ink">默认排序</span>
+                  <select v-model="settings.defaultSort" class="text-sm text-ink-secondary bg-transparent outline-none">
+                    <option value="date-desc">最新优先</option>
+                    <option value="price-asc">价格从低到高</option>
+                    <option value="discount-desc">折扣力度</option>
+                  </select>
+                </div>
+                <div class="flex items-center justify-between px-4 py-3.5">
+                  <span class="text-sm text-ink">货币符号</span>
+                  <select v-model="settings.currency" class="text-sm text-ink-secondary bg-transparent outline-none">
+                    <option value="¥">¥ 人民币</option>
+                    <option value="$">$ 美元</option>
+                  </select>
+                </div>
+              </div>
+              <button @click="saveSettings(); showToast('设置已保存')" class="w-full h-12 rounded-xl bg-brand text-white font-semibold">保存设置</button>
+            </div>
+          </div>
+
+          <!-- ===== AI 设置 ===== -->
+          <div v-show="currentScreen === 'ai-settings'" class="h-full flex flex-col bg-page">
+            <nav-bar title="AI 设置" @back="goBack()"></nav-bar>
+            <div class="flex-1 overflow-y-auto phone-scroll px-4 py-4 space-y-4">
+              <!-- 图片解析提示词 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-xs text-ink-muted font-medium">图片解析提示词</p>
+                  <div class="flex items-center gap-2">
+                    <button @click="copyAiPrompt" class="text-[10px] text-brand font-medium"><i class="fa-solid fa-copy mr-0.5"></i> 复制</button>
+                    <span class="text-ink-muted/30">|</span>
+                    <button @click="resetAiPrompt" class="text-[10px] text-brand font-medium">恢复默认</button>
+                  </div>
+                </div>
+                <textarea v-model="settings.aiPromptPrefix" @blur="saveSettings" rows="6"
+                  class="w-full px-3 py-2 rounded-xl bg-surface-2 text-ink text-[11px] font-mono outline-none resize-none border border-[var(--border)] focus:border-brand"></textarea>
+                <p class="text-[11px] text-ink-muted mt-2">AI 页「复制提示词」按钮将复制此内容，配合商品截图发送给 AI</p>
+              </div>
+
+              <!-- AI 对话配置 -->
+              <div class="bg-[var(--surface)] rounded-2xl p-4 shadow-card space-y-4">
+                <p class="text-xs text-ink-muted font-medium">AI 对话配置</p>
+
+                <!-- 服务商快速选择 -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">服务商</label>
+                  <div class="grid grid-cols-3 gap-2">
+                    <button v-for="p in AI_PROVIDERS_PRESETS" :key="p.id" @click="settings.aiChat = applyProviderPreset(settings.aiChat, p.id)"
+                      :class="settings.aiChat.providerPreset === p.id ? 'ring-2 ring-brand border-brand bg-brand-tint' : 'border-[var(--border)] bg-surface-2'"
+                      class="p-2 rounded-xl border-2 text-center transition">
+                      <p class="text-sm font-medium text-ink">{{ p.name }}</p>
+                      <p class="text-[9px] text-ink-muted mt-0.5 truncate">{{ p.model }}</p>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 协议 -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">协议</label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button v-for="p in AI_PROTOCOLS" :key="p.id" @click="settings.aiChat.protocol = p.id"
+                      :class="settings.aiChat.protocol === p.id ? 'ring-2 ring-brand border-brand bg-brand-tint' : 'border-[var(--border)] bg-surface-2'"
+                      class="p-2.5 rounded-xl border-2 text-center transition">
+                      <p class="text-sm font-medium text-ink">{{ p.name }}</p>
+                      <p class="text-[9px] text-ink-muted mt-0.5 truncate">{{ p.desc }}</p>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- API Key -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">API Key</label>
+                  <input v-model="settings.aiChat.apiKey" type="password" placeholder="sk-..."
+                    class="w-full h-10 px-3 rounded-xl bg-surface-2 border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                  <p class="text-[10px] text-ink-muted mt-1">仅保存在本地 localStorage，不会上传</p>
+                </div>
+
+                <!-- Base URL -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">Base URL（可选）</label>
+                  <input v-model="settings.aiChat.baseUrl" type="url" placeholder="https://api.openai.com/v1"
+                    class="w-full h-10 px-3 rounded-xl bg-surface-2 border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                  <p class="text-[10px] text-ink-muted mt-1">留空使用官方地址；支持第三方代理</p>
+                </div>
+
+                <!-- 模型 -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">模型</label>
+                  <input v-model="settings.aiChat.model" placeholder="gpt-4o / claude-3-5-sonnet"
+                    class="w-full h-10 px-3 rounded-xl bg-surface-2 border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                </div>
+
+                <!-- Agent -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">Agent 角色</label>
+                  <div class="flex flex-wrap gap-2">
+                    <button v-for="a in AI_AGENTS" :key="a.id" @click="settings.aiChat.agentId = a.id"
+                      :class="settings.aiChat.agentId === a.id ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'"
+                      class="px-3 py-1.5 rounded-full text-xs font-medium transition">
+                      {{ a.name }}
+                    </button>
+                  </div>
+                  <p class="text-[10px] text-ink-muted mt-1.5">{{ AI_AGENTS.find(a=>a.id===settings.aiChat.agentId)?.prompt }}</p>
+                </div>
+
+                <!-- Temperature -->
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <label class="text-xs text-ink-muted font-medium">Temperature</label>
+                    <span class="text-xs text-ink-secondary">{{ settings.aiChat.temperature }}</span>
+                  </div>
+                  <input v-model.number="settings.aiChat.temperature" type="range" min="0" max="2" step="0.1"
+                    class="w-full accent-brand" />
+                </div>
+
+                <!-- Max Tokens -->
+                <div>
+                  <label class="text-xs text-ink-muted font-medium mb-1.5 block">Max Tokens</label>
+                  <input v-model.number="settings.aiChat.maxTokens" type="number" min="256" max="8192" step="256"
+                    class="w-full h-10 px-3 rounded-xl bg-surface-2 border border-[var(--border)] text-ink text-sm outline-none focus:border-brand" />
+                </div>
+
+                <button @click="saveAiChatSettings" class="w-full h-11 rounded-xl bg-brand text-white font-semibold active:scale-[.98] transition">保存对话配置</button>
+              </div>
+
+              <button @click="saveSettings(); showToast('AI 设置已保存')" class="w-full h-12 rounded-xl bg-brand text-white font-semibold">保存设置</button>
+            </div>
+          </div>
+
+          <!-- 筛选排序底部弹窗 -->
+          <transition name="fade">
+            <div v-if="showFilterSheet" @click="showFilterSheet=false" class="absolute inset-0 bg-[var(--overlay)] z-20"></div>
+          </transition>
+          <transition name="sheet">
+            <div v-if="showFilterSheet" class="absolute bottom-0 left-0 right-0 z-30 bg-[var(--surface)] rounded-t-3xl px-4 pt-4 pb-8 safe-bottom">
+              <div class="w-10 h-1 rounded-full bg-surface-3 mx-auto mb-4"></div>
+              <h3 class="font-semibold text-ink mb-4">筛选与排序</h3>
+              <p class="text-xs text-ink-muted mb-2">创建时间</p>
+              <div class="flex flex-wrap gap-2 mb-4">
+                <button v-for="t in timeRangeOptions" :key="t.value" @click="setFilterTimeRange(t.value)"
+                  :class="settings.filterTimeRange===t.value ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'"
+                  class="px-3 py-1.5 rounded-full text-xs font-medium">{{ t.label }}</button>
+              </div>
+              <p class="text-xs text-ink-muted mb-2">平台</p>
+              <div class="flex flex-wrap gap-2 mb-4">
+                <button v-for="p in ['全部',...platforms]" :key="p" @click="filterPlatform=p"
+                  :class="filterPlatform===p ? 'bg-brand text-white' : 'bg-surface-2 text-ink-secondary'"
+                  class="px-3 py-1.5 rounded-full text-xs font-medium">{{ p }}</button>
+              </div>
+              <p class="text-xs text-ink-muted mb-2">排序方式</p>
+              <div class="space-y-1 mb-4">
+                <button v-for="s in sortOptions" :key="s.value" @click="sortBy=s.value"
+                  :class="sortBy===s.value ? 'text-brand bg-brand-tint' : 'text-ink-secondary'"
+                  class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-between">
+                  {{ s.label }}
+                  <i v-if="sortBy===s.value" class="fa-solid fa-check text-brand text-xs"></i>
+                </button>
+              </div>
+              <button @click="showFilterSheet=false" class="w-full h-11 rounded-xl bg-brand text-white font-semibold">应用</button>
+            </div>
+          </transition>
+
+          <!-- Toast -->
+          <transition name="fade">
+            <div v-if="toast.show" class="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-black/75 text-white text-sm backdrop-blur whitespace-nowrap">
+              {{ toast.message }}
+            </div>
+          </transition>
+
+          <!-- 删除确认 -->
+          <transition name="fade">
+            <div v-if="deleteConfirm" class="absolute inset-0 bg-[var(--overlay)] z-40 flex items-center justify-center px-8">
+              <div class="bg-[var(--surface)] rounded-2xl p-5 w-full max-w-xs shadow-xl">
+                <h4 class="font-semibold text-ink text-center">确认删除？</h4>
+                <p class="text-xs text-ink-muted text-center mt-2">删除后无法恢复，建议先备份</p>
+                <div class="flex gap-3 mt-5">
+                  <button @click="deleteConfirm=null" class="flex-1 h-10 rounded-xl bg-surface-2 text-ink-secondary text-sm font-medium">取消</button>
+                  <button @click="doDelete" class="flex-1 h-10 rounded-xl bg-red-500 text-white text-sm font-medium">删除</button>
+                </div>
+              </div>
+            </div>
+          </transition>
+
+          <!-- 全量上传确认 -->
+          <transition name="fade">
+            <div v-if="fullUploadConfirm" class="absolute inset-0 bg-[var(--overlay)] z-40 flex items-center justify-center px-8">
+              <div class="bg-[var(--surface)] rounded-2xl p-5 w-full max-w-xs shadow-xl">
+                <div class="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-3">
+                  <i class="fa-solid fa-cloud-arrow-up text-amber-500 text-xl"></i>
+                </div>
+                <h4 class="font-semibold text-ink text-center">全量上传</h4>
+                <p class="text-xs text-ink-muted text-center mt-2 leading-relaxed">将本地完整数据库和所有图片上传到云端，<strong class="text-ink">覆盖云端所有数据</strong>。</p>
+                <p class="text-xs text-amber-600 text-center mt-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>此操作不可撤销</p>
+                <div class="flex gap-3 mt-5">
+                  <button @click="fullUploadConfirm=false" class="flex-1 h-10 rounded-xl bg-surface-2 text-ink-secondary text-sm font-medium">取消</button>
+                  <button @click="doFullUpload" class="flex-1 h-10 rounded-xl bg-amber-500 text-white text-sm font-medium">确认上传</button>
+                </div>
+              </div>
+            </div>
+          </transition>
+
+          <!-- 全量下载确认 -->
+          <transition name="fade">
+            <div v-if="fullDownloadConfirm" class="absolute inset-0 bg-[var(--overlay)] z-40 flex items-center justify-center px-8">
+              <div class="bg-[var(--surface)] rounded-2xl p-5 w-full max-w-xs shadow-xl">
+                <div class="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-3">
+                  <i class="fa-solid fa-cloud-arrow-down text-blue-500 text-xl"></i>
+                </div>
+                <h4 class="font-semibold text-ink text-center">全量下载</h4>
+                <p class="text-xs text-ink-muted text-center mt-2 leading-relaxed">从云端下载完整数据库和所有图片，<strong class="text-ink">覆盖本地所有数据</strong>。</p>
+                <p v-if="cloudPendingChanges > 0" class="text-xs text-amber-600 text-center mt-2">
+                  <i class="fa-solid fa-triangle-exclamation mr-1"></i>本地有 {{ cloudPendingChanges }} 条未同步修改，将被丢弃
+                </p>
+                <div class="flex gap-3 mt-5">
+                  <button @click="fullDownloadConfirm=false" class="flex-1 h-10 rounded-xl bg-surface-2 text-ink-secondary text-sm font-medium">取消</button>
+                  <button @click="doFullDownload" class="flex-1 h-10 rounded-xl bg-blue-500 text-white text-sm font-medium">确认下载</button>
+                </div>
+              </div>
+            </div>
+          </transition>
+        </div>
+
+        <!-- 底部 Tab Bar -->
+        <div v-show="showTabBar" class="h-[83px] shrink-0 bg-[var(--tabbar)] border-t border-[var(--border)] flex items-start justify-around pt-2 safe-bottom">
+          <button v-for="(tab, i) in tabs" :key="tab.label" @click="switchTab(i)"
+            :class="activeTab === i && currentScreen === 'list' ? 'text-brand' : 'text-ink-muted'"
+            class="flex flex-col items-center gap-0.5 w-16 pt-1 transition">
+            <i :class="tab.icon" class="text-xl"></i>
+            <span class="text-[10px] font-medium">{{ tab.label }}</span>
+          </button>
+        </div>
+      </div>
+      <!-- 屏幕标注 -->
+      <p class="text-center text-xs text-slate-500 mt-4">当前：{{ screenLabel }}</p>
+    </div>
+  </main>
+
+  <!-- 原型总览模式 -->
+  <main v-show="viewMode === 'overview'" class="max-w-7xl mx-auto px-4 py-8 prototype-grid">
+    <h2 class="text-xl font-bold text-slate-800 mb-2">全部原型界面总览</h2>
+    <p class="text-sm text-slate-500 mb-8">共 {{ overviewScreens.length }} 个界面 · 点击可跳转至交互演示</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+      <div v-for="screen in overviewScreens" :key="screen.id" class="flex flex-col items-center">
+        <p class="text-sm font-semibold text-slate-700 mb-2">{{ screen.label }}</p>
+        <div @click="jumpToScreen(screen)" class="phone-device phone-frame w-[375px] h-[667px] rounded-[36px] shadow-phone overflow-hidden cursor-pointer relative" :data-theme="settings.theme">
+          <component :is="'div'" v-html="screen.preview" class="h-full overflow-hidden scale-[0.89] origin-top"></component>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

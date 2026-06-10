@@ -1,0 +1,242 @@
+/* ===== 亮色主题（默认） ===== */
+:root,
+[data-theme="light"] {
+  --bg: #F2F3F5;
+  --surface: #FFFFFF;
+  --surface-2: #F8F9FA;
+  --surface-3: #EEF0F2;
+  --text: #1A1A1A;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --border: #E8E8E8;
+  --tabbar: #FFFFFF;
+  --statusbar: #FFFFFF;
+  --overlay: rgba(0, 0, 0, 0.45);
+  --brand: #46C01B;
+  --brand-dark: #3AA816;
+  --brand-light: rgba(70, 192, 27, 0.12);
+  --bezel: #1C1C1E;
+}
+
+/* ===== 暗色主题 ===== */
+[data-theme="dark"] {
+  --bg: #121212;
+  --surface: #1E1E1E;
+  --surface-2: #2A2A2A;
+  --surface-3: #333333;
+  --text: #F0F0F0;
+  --text-secondary: #A0A0A0;
+  --text-muted: #707070;
+  --border: #3A3A3A;
+  --tabbar: #1E1E1E;
+  --statusbar: #1E1E1E;
+  --overlay: rgba(0, 0, 0, 0.65);
+  --brand: #46C01B;
+  --brand-dark: #3AA816;
+  --brand-light: rgba(70, 192, 27, 0.18);
+  --bezel: #000000;
+}
+
+* { -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+/* ===== 手机容器 ===== */
+.phone-device {
+  background: var(--bezel);
+  color: var(--text);
+}
+
+.phone-screen {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* ===== 主题色工具类（不依赖 Tailwind 配置） ===== */
+.bg-page { background-color: var(--bg) !important; }
+.bg-surface { background-color: var(--surface) !important; }
+.bg-surface-2 { background-color: var(--surface-2) !important; }
+.bg-surface-3 { background-color: var(--surface-3) !important; }
+.bg-brand { background-color: var(--brand) !important; }
+.bg-brand-dark { background-color: var(--brand-dark) !important; }
+.bg-brand-tint { background-color: var(--brand-light) !important; }
+.bg-brand-hint { background-color: rgba(70, 192, 27, 0.06) !important; }
+.border-brand-tint { border-color: rgba(70, 192, 27, 0.25) !important; }
+
+.text-ink { color: var(--text) !important; }
+.text-ink-secondary { color: var(--text-secondary) !important; }
+.text-ink-muted { color: var(--text-muted) !important; }
+.text-brand { color: var(--brand) !important; }
+
+.border-app { border-color: var(--border) !important; }
+
+.hover\:bg-surface-3:hover { background-color: var(--surface-3) !important; }
+
+/* ===== 滚动与布局 ===== */
+.phone-scroll::-webkit-scrollbar { width: 0; }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.line-clamp-1,
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-1 { -webkit-line-clamp: 1; }
+.line-clamp-2 { -webkit-line-clamp: 2; }
+
+/* ===== 清单简单展示（紧凑） ===== */
+.deal-simple {
+  padding: 7px 10px;
+}
+.deal-simple__title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.deal-simple__prices {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.deal-simple__label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-right: 1px;
+  font-weight: 400;
+}
+.deal-simple__original {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.deal-simple__savings {
+  color: var(--brand);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.deal-simple__current {
+  margin-left: auto;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.deal-simple__search-prices {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* ===== 原型总览 ===== */
+.prototype-grid .phone-frame { transform: scale(1); transition: transform 0.2s; }
+.prototype-grid .phone-frame:hover { transform: scale(1.02); }
+
+input, textarea, select { font-size: 16px; }
+
+/* ===== 过渡动画 ===== */
+.sheet-enter-active, .sheet-leave-active { transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
+.sheet-enter-from, .sheet-leave-to { transform: translateY(100%); }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.ascii-art {
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: pre;
+  overflow-x: auto;
+  color: var(--text-secondary);
+}
+
+.yaml-editor {
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+/* ===== AI WebView 模拟 ===== */
+.webview-chrome {
+  background: var(--surface);
+}
+.webview-body {
+  background: var(--bg);
+  position: relative;
+}
+.webview-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.webview-page-mock {
+  padding: 20px 16px 16px;
+  min-height: 100%;
+}
+.webview-page-mock__hero {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.webview-page-mock__logo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 10px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+.webview-page-mock__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.webview-page-mock__subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.webview-page-mock__card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.webview-page-mock__hint {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--brand-light);
+  border: 1px solid rgba(70, 192, 27, 0.2);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.webview-footer {
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}

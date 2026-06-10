@@ -18,7 +18,7 @@ class _AboutScreenState extends State<AboutScreen> {
   String? _error;
 
   static const String _updateUrl =
-      'https://raw.githubusercontent.com/user/repo/main/changelog.json';
+      'https://raw.githubusercontent.com/xucux/ZheDuoDuo/main/changelog.json';
 
   @override
   void initState() {

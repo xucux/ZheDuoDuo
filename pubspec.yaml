@@ -26,8 +26,10 @@ dependencies:
   connectivity_plus: ^6.0.5
   crypto: ^3.0.6
   synchronized: any
+  webdav_client_plus: ^1.0.2
 
   # 图片
+  flutter_image_compress: ^2.3.0
   flutter_image_compress_common: ^1.0.5
   flutter_image_compress_platform_interface: ^1.0.5
   image_picker: ^1.2.1
@@ -48,6 +50,7 @@ dependencies:
   animations: ^2.0.0
 
   # 工具
+  permission_handler: ^11.4.0
   path_provider: ^2.1.5
   path: any
   share_plus: ^10.1.0
@@ -61,6 +64,9 @@ dependencies:
   webview_flutter: 4.10.0
   webview_flutter_android: 4.3.0
   shared_preferences: ^2.3.4
+
+  # OCR
+  google_mlkit_text_recognition: ^0.15.0
 
 dev_dependencies:
   flutter_test:

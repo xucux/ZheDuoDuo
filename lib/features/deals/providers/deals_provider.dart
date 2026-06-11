@@ -6,6 +6,7 @@
 // - 优惠列表的响应式监听（dealsProvider）
 // - 单条优惠/平台/分类/标签/数量的异步查询
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/daos/deal_dao.dart';
 import '../../../shared/theme/theme_provider.dart';
@@ -23,6 +24,7 @@ class DealFilters {
   final String sortBy;
   final bool ascending;
   final String displayMode; // 'normal' or 'simple'
+  final DateTimeRange? dateRange;
 
   const DealFilters({
     this.platform,
@@ -31,7 +33,20 @@ class DealFilters {
     this.sortBy = 'created_at',
     this.ascending = false,
     this.displayMode = 'normal',
+    this.dateRange,
   });
+
+  /// 默认筛选条件（最近半年）
+  factory DealFilters.defaultFilters() {
+    final end = DateTime.now();
+    final start = end.subtract(const Duration(days: 180));
+    return DealFilters(
+      dateRange: DateTimeRange(
+        start: DateTime(start.year, start.month, start.day),
+        end: DateTime(end.year, end.month, end.day, 23, 59, 59),
+      ),
+    );
+  }
 
   DealFilters copyWith({
     String? platform,
@@ -40,9 +55,11 @@ class DealFilters {
     String? sortBy,
     bool? ascending,
     String? displayMode,
+    DateTimeRange? dateRange,
     bool clearPlatform = false,
     bool clearCategory = false,
     bool clearSearch = false,
+    bool clearDateRange = false,
   }) {
     return DealFilters(
       platform: clearPlatform ? null : (platform ?? this.platform),
@@ -51,12 +68,13 @@ class DealFilters {
       sortBy: sortBy ?? this.sortBy,
       ascending: ascending ?? this.ascending,
       displayMode: displayMode ?? this.displayMode,
+      dateRange: clearDateRange ? null : (dateRange ?? this.dateRange),
     );
   }
 }
 
 class DealFiltersNotifier extends StateNotifier<DealFilters> {
-  DealFiltersNotifier() : super(const DealFilters());
+  DealFiltersNotifier() : super(DealFilters.defaultFilters());
 
   void setPlatform(String? platform) {
     state = state.copyWith(platform: platform, clearPlatform: platform == null);
@@ -78,8 +96,12 @@ class DealFiltersNotifier extends StateNotifier<DealFilters> {
     state = state.copyWith(displayMode: mode);
   }
 
+  void setDateRange(DateTimeRange? range) {
+    state = state.copyWith(dateRange: range, clearDateRange: range == null);
+  }
+
   void reset() {
-    state = const DealFilters();
+    state = DealFilters.defaultFilters();
   }
 }
 
@@ -98,6 +120,8 @@ final dealsProvider = StreamProvider<List<DealWithDetails>>((ref) {
     searchQuery: filters.searchQuery,
     sortBy: filters.sortBy,
     ascending: filters.ascending,
+    startDate: filters.dateRange?.start,
+    endDate: filters.dateRange?.end,
   );
 });
 

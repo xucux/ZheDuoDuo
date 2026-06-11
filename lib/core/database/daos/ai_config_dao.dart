@@ -67,6 +67,12 @@ class AiConfigDao extends DatabaseAccessor<AppDatabase> with _$AiConfigDaoMixin 
     await (delete(aiConfigs)..where((t) => t.id.equals(id))).go();
   }
 
+  /// 获取指定 ID 的配置
+  Future<AiConfig?> getConfig(String id) async {
+    final query = select(aiConfigs)..where((t) => t.id.equals(id));
+    return query.getSingleOrNull();
+  }
+
   /// 确保至少有一个默认配置
   ///
   /// 如果没有任何配置，创建一个默认配置并激活。
@@ -83,11 +89,11 @@ class AiConfigDao extends DatabaseAccessor<AppDatabase> with _$AiConfigDaoMixin 
     final now = DateTime.now();
     final defaultConfig = AiConfigsCompanion.insert(
       id: 'default',
-      providerPreset: const Value('custom'),
-      protocol: const Value('openai'),
+      providerPreset: const Value('DeepSeek'),
+      protocol: const Value('openaiChat'),
       apiKey: const Value(''),
-      baseUrl: const Value(''),
-      model: const Value(''),
+      baseUrl: const Value('https://api.deepseek.com/v1'),
+      model: const Value('deepseek-chat'),
       agentRole: const Value('default'),
       agentPrompt: const Value(''),
       temperature: const Value(0.7),

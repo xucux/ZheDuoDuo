@@ -16,10 +16,7 @@ enum AiProtocol {
   openaiChat,
 
   /// Anthropic Messages API
-  anthropic,
-
-  /// GitHub Copilot API
-  githubCopilot;
+  anthropic;
 
   /// 从字符串解析协议类型
   static AiProtocol fromString(String value) {
@@ -30,8 +27,6 @@ enum AiProtocol {
         return AiProtocol.openaiChat;
       case 'anthropic':
         return AiProtocol.anthropic;
-      case 'githubCopilot':
-        return AiProtocol.githubCopilot;
       default:
         return AiProtocol.openaiChat;
     }
@@ -92,11 +87,11 @@ class AiProviderPreset {
       model: 'claude-3-5-sonnet-20241022',
     ),
     AiProviderPreset(
-      id: 'githubCopilot',
-      name: 'GitHub Copilot',
-      protocol: AiProtocol.githubCopilot,
-      baseUrl: 'https://api.githubcopilot.com',
-      model: 'gpt-4o-copilot',
+      id: 'xiaomimimo',
+      name: '小米 MIMO',
+      protocol: AiProtocol.openaiChat,
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+      model: '',
     ),
     AiProviderPreset(
       id: 'custom',
@@ -113,6 +108,81 @@ class AiProviderPreset {
       if (p.id == id) return p;
     }
     return null;
+  }
+}
+
+// ==================== 数据库配置行映射 ====================
+
+/// 数据库 AI 配置行的 Dart 映射
+///
+/// 对应 `ai_configs` 表中一行记录，用于在 UI 中展示和管理。
+/// 与 [AiChatSettings] 不同，此模型完整映射数据库字段。
+class AiProviderConfig {
+  final String id;
+  final String name;
+  final AiProtocol protocol;
+  final String apiKey;
+  final String baseUrl;
+  final String model;
+  final String agentId;
+  final double temperature;
+  final int maxTokens;
+  final bool isActive;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const AiProviderConfig({
+    required this.id,
+    this.name = '',
+    this.protocol = AiProtocol.openaiChat,
+    this.apiKey = '',
+    this.baseUrl = '',
+    this.model = '',
+    this.agentId = 'default',
+    this.temperature = 0.7,
+    this.maxTokens = 4096,
+    this.isActive = false,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  AiProviderConfig copyWith({
+    String? id,
+    String? name,
+    AiProtocol? protocol,
+    String? apiKey,
+    String? baseUrl,
+    String? model,
+    String? agentId,
+    double? temperature,
+    int? maxTokens,
+    bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return AiProviderConfig(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      protocol: protocol ?? this.protocol,
+      apiKey: apiKey ?? this.apiKey,
+      baseUrl: baseUrl ?? this.baseUrl,
+      model: model ?? this.model,
+      agentId: agentId ?? this.agentId,
+      temperature: temperature ?? this.temperature,
+      maxTokens: maxTokens ?? this.maxTokens,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  /// 应用内置预设作为快速填充（仅覆盖 protocol / baseUrl / model）
+  AiProviderConfig applyPreset(AiProviderPreset preset) {
+    return copyWith(
+      protocol: preset.protocol,
+      baseUrl: preset.baseUrl,
+      model: preset.model,
+    );
   }
 }
 
@@ -251,8 +321,16 @@ class AiChatSettings {
     );
   }
 
-  /// 应用服务商预设，自动填充协议、Base URL 和模型
-  AiChatSettings applyPreset(String presetId) {
+  /// 应用服务商预设或直接值，自动填充协议、Base URL 和模型
+  AiChatSettings applyPreset(String presetId, {AiProtocol? protocol, String? baseUrl, String? model}) {
+    if (protocol != null && baseUrl != null && model != null) {
+      return copyWith(
+        providerPreset: presetId,
+        protocol: protocol,
+        baseUrl: baseUrl,
+        model: model,
+      );
+    }
     final preset = AiProviderPreset.findById(presetId);
     if (preset == null) return this;
     return copyWith(
@@ -291,6 +369,11 @@ class ChatMessage {
   final String id;
   final ChatMessageRole role;
   final String content;
+
+  /// 推理过程内容（如 DeepSeek reasoning_content）
+  ///
+  /// 仅用于展示，不参与发送给 API 的上下文。
+  final String? reasoningContent;
   final List<String> imagePaths;
   final DateTime createdAt;
 
@@ -298,6 +381,7 @@ class ChatMessage {
     required this.id,
     required this.role,
     required this.content,
+    this.reasoningContent,
     this.imagePaths = const [],
     required this.createdAt,
   });
@@ -308,6 +392,7 @@ class ChatMessage {
       id: json['id'] as String,
       role: ChatMessageRole.fromString(json['role'] as String),
       content: json['content'] as String,
+      reasoningContent: json['reasoningContent'] as String?,
       imagePaths: (json['imagePaths'] as List?)?.cast<String>() ?? [],
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
@@ -318,6 +403,8 @@ class ChatMessage {
         'id': id,
         'role': role.toKey(),
         'content': content,
+        if (reasoningContent != null && reasoningContent!.isNotEmpty)
+          'reasoningContent': reasoningContent,
         if (imagePaths.isNotEmpty) 'imagePaths': imagePaths,
         'createdAt': createdAt.toIso8601String(),
       };

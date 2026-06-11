@@ -43,23 +43,35 @@ class BackupResult {
 /// 本地备份服务
 ///
 /// 提供优惠数据的 zip 格式导出/导入，以及备份文件管理。
-/// 数据存储在应用文档目录的 zheduoduo_data/ 下。
+/// 数据存储在外部存储（Android）或应用文档目录的 zheduoduo_data/ 下。
 class BackupService {
   final AppDatabase _db;
 
   BackupService(this._db);
 
+  /// 获取存储根目录（Android 使用应用外部私有目录）
+  Future<Directory> _getRootDir() async {
+    if (Platform.isAndroid) {
+      // getExternalStorageDirectory() 已返回 /storage/emulated/0/Android/data/<package>/files/
+      final externalDir = await getExternalStorageDirectory();
+      if (externalDir != null) {
+        return externalDir;
+      }
+    }
+    return getApplicationDocumentsDirectory();
+  }
+
   /// 获取数据库文件的实际路径
   Future<String> _getDbFilePath() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    // drift_flutter 存储在 appDocumentsDir/zheduoduo_data/zheduoduo.db
-    return p.join(appDir.path, 'zheduoduo_data', 'zheduoduo.db');
+    final rootDir = await _getRootDir();
+    // drift_flutter 存储在 rootDir/zheduoduo_data/zheduoduo.sqlite
+    return p.join(rootDir.path, 'zheduoduo_data', 'zheduoduo.sqlite');
   }
 
   /// 获取数据根目录
   Future<Directory> _getDataDir() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final dataDir = Directory(p.join(appDir.path, 'zheduoduo_data'));
+    final rootDir = await _getRootDir();
+    final dataDir = Directory(p.join(rootDir.path, 'zheduoduo_data'));
     if (!dataDir.existsSync()) {
       dataDir.createSync(recursive: true);
     }
@@ -68,8 +80,8 @@ class BackupService {
 
   /// 获取备份目录
   Future<Directory> _getBackupsDir() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final backupDir = Directory(p.join(appDir.path, 'zheduoduo_data', 'backups'));
+    final rootDir = await _getRootDir();
+    final backupDir = Directory(p.join(rootDir.path, 'zheduoduo_data', 'backups'));
     if (!backupDir.existsSync()) {
       backupDir.createSync(recursive: true);
     }
@@ -78,8 +90,8 @@ class BackupService {
 
   /// 获取图片目录
   Future<Directory> _getImagesDir() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final imgDir = Directory(p.join(appDir.path, 'zheduoduo_data', 'images'));
+    final rootDir = await _getRootDir();
+    final imgDir = Directory(p.join(rootDir.path, 'zheduoduo_data', 'images'));
     if (!imgDir.existsSync()) {
       imgDir.createSync(recursive: true);
     }
@@ -115,7 +127,7 @@ class BackupService {
 
       // 添加数据库文件
       final dbBytes = await dbFile.readAsBytes();
-      archive.addFile(ArchiveFile('zheduoduo.db', dbBytes.length, dbBytes));
+      archive.addFile(ArchiveFile('zheduoduo.sqlite', dbBytes.length, dbBytes));
 
       // 添加图片目录
       final imagesDir = await _getImagesDir();
@@ -193,8 +205,8 @@ class BackupService {
       for (final file in archive) {
         final fileName = file.name;
 
-        if (fileName == 'zheduoduo.db') {
-          final dbPath = p.join(dataDir.path, 'zheduoduo.db');
+        if (fileName == 'zheduoduo.sqlite' || fileName == 'zheduoduo.db') {
+          final dbPath = p.join(dataDir.path, 'zheduoduo.sqlite');
           await File(dbPath).writeAsBytes(file.content as List<int>);
         } else if (fileName.startsWith('images/') && file.isFile) {
           final imgName = fileName.substring(7);
@@ -280,6 +292,18 @@ class BackupService {
       }
     }
     return totalSize;
+  }
+
+  /// 获取图片文件数量
+  Future<int> getImagesCount() async {
+    final imagesDir = await _getImagesDir();
+    if (!imagesDir.existsSync()) return 0;
+
+    int count = 0;
+    await for (final entity in imagesDir.list()) {
+      if (entity is File) count++;
+    }
+    return count;
   }
 
   /// 获取数据库文件大小

@@ -170,6 +170,18 @@ class $DealsTable extends Deals with TableInfo<$DealsTable, Deal> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isLowestPriceMeta = const VerificationMeta(
+    'isLowestPrice',
+  );
+  @override
+  late final GeneratedColumn<int> isLowestPrice = GeneratedColumn<int>(
+    'is_lowest_price',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -255,6 +267,7 @@ class $DealsTable extends Deals with TableInfo<$DealsTable, Deal> {
     visualType,
     asciiArt,
     salesJson,
+    isLowestPrice,
     createdAt,
     updatedAt,
     revision,
@@ -376,6 +389,15 @@ class $DealsTable extends Deals with TableInfo<$DealsTable, Deal> {
         salesJson.isAcceptableOrUnknown(data['sales_json']!, _salesJsonMeta),
       );
     }
+    if (data.containsKey('is_lowest_price')) {
+      context.handle(
+        _isLowestPriceMeta,
+        isLowestPrice.isAcceptableOrUnknown(
+          data['is_lowest_price']!,
+          _isLowestPriceMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -485,6 +507,10 @@ class $DealsTable extends Deals with TableInfo<$DealsTable, Deal> {
         DriftSqlType.string,
         data['${effectivePrefix}sales_json'],
       ),
+      isLowestPrice: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_lowest_price'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -534,6 +560,7 @@ class Deal extends DataClass implements Insertable<Deal> {
   final String visualType;
   final String? asciiArt;
   final String? salesJson;
+  final int isLowestPrice;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int revision;
@@ -556,6 +583,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     required this.visualType,
     this.asciiArt,
     this.salesJson,
+    required this.isLowestPrice,
     required this.createdAt,
     required this.updatedAt,
     required this.revision,
@@ -597,6 +625,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     if (!nullToAbsent || salesJson != null) {
       map['sales_json'] = Variable<String>(salesJson);
     }
+    map['is_lowest_price'] = Variable<int>(isLowestPrice);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['revision'] = Variable<int>(revision);
@@ -639,6 +668,7 @@ class Deal extends DataClass implements Insertable<Deal> {
       salesJson: salesJson == null && nullToAbsent
           ? const Value.absent()
           : Value(salesJson),
+      isLowestPrice: Value(isLowestPrice),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       revision: Value(revision),
@@ -673,6 +703,7 @@ class Deal extends DataClass implements Insertable<Deal> {
       visualType: serializer.fromJson<String>(json['visualType']),
       asciiArt: serializer.fromJson<String?>(json['asciiArt']),
       salesJson: serializer.fromJson<String?>(json['salesJson']),
+      isLowestPrice: serializer.fromJson<int>(json['isLowestPrice']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       revision: serializer.fromJson<int>(json['revision']),
@@ -700,6 +731,7 @@ class Deal extends DataClass implements Insertable<Deal> {
       'visualType': serializer.toJson<String>(visualType),
       'asciiArt': serializer.toJson<String?>(asciiArt),
       'salesJson': serializer.toJson<String?>(salesJson),
+      'isLowestPrice': serializer.toJson<int>(isLowestPrice),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'revision': serializer.toJson<int>(revision),
@@ -725,6 +757,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     String? visualType,
     Value<String?> asciiArt = const Value.absent(),
     Value<String?> salesJson = const Value.absent(),
+    int? isLowestPrice,
     DateTime? createdAt,
     DateTime? updatedAt,
     int? revision,
@@ -749,6 +782,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     visualType: visualType ?? this.visualType,
     asciiArt: asciiArt.present ? asciiArt.value : this.asciiArt,
     salesJson: salesJson.present ? salesJson.value : this.salesJson,
+    isLowestPrice: isLowestPrice ?? this.isLowestPrice,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     revision: revision ?? this.revision,
@@ -781,6 +815,9 @@ class Deal extends DataClass implements Insertable<Deal> {
           : this.visualType,
       asciiArt: data.asciiArt.present ? data.asciiArt.value : this.asciiArt,
       salesJson: data.salesJson.present ? data.salesJson.value : this.salesJson,
+      isLowestPrice: data.isLowestPrice.present
+          ? data.isLowestPrice.value
+          : this.isLowestPrice,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       revision: data.revision.present ? data.revision.value : this.revision,
@@ -808,6 +845,7 @@ class Deal extends DataClass implements Insertable<Deal> {
           ..write('visualType: $visualType, ')
           ..write('asciiArt: $asciiArt, ')
           ..write('salesJson: $salesJson, ')
+          ..write('isLowestPrice: $isLowestPrice, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('revision: $revision, ')
@@ -835,6 +873,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     visualType,
     asciiArt,
     salesJson,
+    isLowestPrice,
     createdAt,
     updatedAt,
     revision,
@@ -861,6 +900,7 @@ class Deal extends DataClass implements Insertable<Deal> {
           other.visualType == this.visualType &&
           other.asciiArt == this.asciiArt &&
           other.salesJson == this.salesJson &&
+          other.isLowestPrice == this.isLowestPrice &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.revision == this.revision &&
@@ -885,6 +925,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
   final Value<String> visualType;
   final Value<String?> asciiArt;
   final Value<String?> salesJson;
+  final Value<int> isLowestPrice;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> revision;
@@ -908,6 +949,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     this.visualType = const Value.absent(),
     this.asciiArt = const Value.absent(),
     this.salesJson = const Value.absent(),
+    this.isLowestPrice = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.revision = const Value.absent(),
@@ -932,6 +974,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     this.visualType = const Value.absent(),
     this.asciiArt = const Value.absent(),
     this.salesJson = const Value.absent(),
+    this.isLowestPrice = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.revision = const Value.absent(),
@@ -960,6 +1003,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     Expression<String>? visualType,
     Expression<String>? asciiArt,
     Expression<String>? salesJson,
+    Expression<int>? isLowestPrice,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? revision,
@@ -984,6 +1028,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
       if (visualType != null) 'visual_type': visualType,
       if (asciiArt != null) 'ascii_art': asciiArt,
       if (salesJson != null) 'sales_json': salesJson,
+      if (isLowestPrice != null) 'is_lowest_price': isLowestPrice,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (revision != null) 'revision': revision,
@@ -1010,6 +1055,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     Value<String>? visualType,
     Value<String?>? asciiArt,
     Value<String?>? salesJson,
+    Value<int>? isLowestPrice,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? revision,
@@ -1034,6 +1080,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
       visualType: visualType ?? this.visualType,
       asciiArt: asciiArt ?? this.asciiArt,
       salesJson: salesJson ?? this.salesJson,
+      isLowestPrice: isLowestPrice ?? this.isLowestPrice,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       revision: revision ?? this.revision,
@@ -1092,6 +1139,9 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     if (salesJson.present) {
       map['sales_json'] = Variable<String>(salesJson.value);
     }
+    if (isLowestPrice.present) {
+      map['is_lowest_price'] = Variable<int>(isLowestPrice.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1134,6 +1184,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
           ..write('visualType: $visualType, ')
           ..write('asciiArt: $asciiArt, ')
           ..write('salesJson: $salesJson, ')
+          ..write('isLowestPrice: $isLowestPrice, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('revision: $revision, ')
@@ -2164,6 +2215,18 @@ class $DealImagesTable extends DealImages
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _deletedMeta = const VerificationMeta(
+    'deleted',
+  );
+  @override
+  late final GeneratedColumn<int> deleted = GeneratedColumn<int>(
+    'deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     dealId,
@@ -2176,6 +2239,7 @@ class $DealImagesTable extends DealImages
     compressedSize,
     sourceUrl,
     updatedAt,
+    deleted,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2261,6 +2325,12 @@ class $DealImagesTable extends DealImages
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('deleted')) {
+      context.handle(
+        _deletedMeta,
+        deleted.isAcceptableOrUnknown(data['deleted']!, _deletedMeta),
+      );
+    }
     return context;
   }
 
@@ -2310,6 +2380,10 @@ class $DealImagesTable extends DealImages
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      deleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted'],
+      )!,
     );
   }
 
@@ -2330,6 +2404,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
   final int? compressedSize;
   final String? sourceUrl;
   final DateTime updatedAt;
+  final int deleted;
   const DealImage({
     required this.dealId,
     required this.imagePath,
@@ -2341,6 +2416,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
     this.compressedSize,
     this.sourceUrl,
     required this.updatedAt,
+    required this.deleted,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2369,6 +2445,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
       map['source_url'] = Variable<String>(sourceUrl);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['deleted'] = Variable<int>(deleted);
     return map;
   }
 
@@ -2398,6 +2475,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
           ? const Value.absent()
           : Value(sourceUrl),
       updatedAt: Value(updatedAt),
+      deleted: Value(deleted),
     );
   }
 
@@ -2417,6 +2495,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
       compressedSize: serializer.fromJson<int?>(json['compressedSize']),
       sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deleted: serializer.fromJson<int>(json['deleted']),
     );
   }
   @override
@@ -2433,6 +2512,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
       'compressedSize': serializer.toJson<int?>(compressedSize),
       'sourceUrl': serializer.toJson<String?>(sourceUrl),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deleted': serializer.toJson<int>(deleted),
     };
   }
 
@@ -2447,6 +2527,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
     Value<int?> compressedSize = const Value.absent(),
     Value<String?> sourceUrl = const Value.absent(),
     DateTime? updatedAt,
+    int? deleted,
   }) => DealImage(
     dealId: dealId ?? this.dealId,
     imagePath: imagePath ?? this.imagePath,
@@ -2460,6 +2541,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
         : this.compressedSize,
     sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
     updatedAt: updatedAt ?? this.updatedAt,
+    deleted: deleted ?? this.deleted,
   );
   DealImage copyWithCompanion(DealImagesCompanion data) {
     return DealImage(
@@ -2477,6 +2559,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
           : this.compressedSize,
       sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deleted: data.deleted.present ? data.deleted.value : this.deleted,
     );
   }
 
@@ -2492,7 +2575,8 @@ class DealImage extends DataClass implements Insertable<DealImage> {
           ..write('originalSize: $originalSize, ')
           ..write('compressedSize: $compressedSize, ')
           ..write('sourceUrl: $sourceUrl, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deleted: $deleted')
           ..write(')'))
         .toString();
   }
@@ -2509,6 +2593,7 @@ class DealImage extends DataClass implements Insertable<DealImage> {
     compressedSize,
     sourceUrl,
     updatedAt,
+    deleted,
   );
   @override
   bool operator ==(Object other) =>
@@ -2523,7 +2608,8 @@ class DealImage extends DataClass implements Insertable<DealImage> {
           other.originalSize == this.originalSize &&
           other.compressedSize == this.compressedSize &&
           other.sourceUrl == this.sourceUrl &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.deleted == this.deleted);
 }
 
 class DealImagesCompanion extends UpdateCompanion<DealImage> {
@@ -2537,6 +2623,7 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
   final Value<int?> compressedSize;
   final Value<String?> sourceUrl;
   final Value<DateTime> updatedAt;
+  final Value<int> deleted;
   final Value<int> rowid;
   const DealImagesCompanion({
     this.dealId = const Value.absent(),
@@ -2549,6 +2636,7 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
     this.compressedSize = const Value.absent(),
     this.sourceUrl = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.deleted = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   DealImagesCompanion.insert({
@@ -2562,6 +2650,7 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
     this.compressedSize = const Value.absent(),
     this.sourceUrl = const Value.absent(),
     required DateTime updatedAt,
+    this.deleted = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : dealId = Value(dealId),
        imagePath = Value(imagePath),
@@ -2577,6 +2666,7 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
     Expression<int>? compressedSize,
     Expression<String>? sourceUrl,
     Expression<DateTime>? updatedAt,
+    Expression<int>? deleted,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2590,6 +2680,7 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
       if (compressedSize != null) 'compressed_size': compressedSize,
       if (sourceUrl != null) 'source_url': sourceUrl,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (deleted != null) 'deleted': deleted,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2605,6 +2696,7 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
     Value<int?>? compressedSize,
     Value<String?>? sourceUrl,
     Value<DateTime>? updatedAt,
+    Value<int>? deleted,
     Value<int>? rowid,
   }) {
     return DealImagesCompanion(
@@ -2618,6 +2710,7 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
       compressedSize: compressedSize ?? this.compressedSize,
       sourceUrl: sourceUrl ?? this.sourceUrl,
       updatedAt: updatedAt ?? this.updatedAt,
+      deleted: deleted ?? this.deleted,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2655,6 +2748,9 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (deleted.present) {
+      map['deleted'] = Variable<int>(deleted.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2674,6 +2770,7 @@ class DealImagesCompanion extends UpdateCompanion<DealImage> {
           ..write('compressedSize: $compressedSize, ')
           ..write('sourceUrl: $sourceUrl, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('deleted: $deleted, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4357,7 +4454,7 @@ class $AiConfigsTable extends AiConfigs
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant('openai'),
+    defaultValue: const Constant('openaiChat'),
   );
   static const VerificationMeta _apiKeyMeta = const VerificationMeta('apiKey');
   @override
@@ -4668,7 +4765,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
   /// 服务商预设 ID（deepseek / siliconflow / openai / claude / custom）
   final String providerPreset;
 
-  /// 协议类型（openai / claude）
+  /// 协议类型（openaiResponses / openaiChat / anthropic / githubCopilot）
   final String protocol;
 
   /// API Key（明文存储）
@@ -5602,6 +5699,762 @@ class SecretsCompanion extends UpdateCompanion<Secret> {
   }
 }
 
+class $PromptsTable extends Prompts with TableInfo<$PromptsTable, Prompt> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PromptsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('custom'),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    content,
+    category,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'prompts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Prompt> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => const {};
+  @override
+  Prompt map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Prompt(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PromptsTable createAlias(String alias) {
+    return $PromptsTable(attachedDatabase, alias);
+  }
+}
+
+class Prompt extends DataClass implements Insertable<Prompt> {
+  final String id;
+  final String name;
+  final String content;
+  final String category;
+  final int sortOrder;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const Prompt({
+    required this.id,
+    required this.name,
+    required this.content,
+    required this.category,
+    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['content'] = Variable<String>(content);
+    map['category'] = Variable<String>(category);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  PromptsCompanion toCompanion(bool nullToAbsent) {
+    return PromptsCompanion(
+      id: Value(id),
+      name: Value(name),
+      content: Value(content),
+      category: Value(category),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Prompt.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Prompt(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      content: serializer.fromJson<String>(json['content']),
+      category: serializer.fromJson<String>(json['category']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'content': serializer.toJson<String>(content),
+      'category': serializer.toJson<String>(category),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Prompt copyWith({
+    String? id,
+    String? name,
+    String? content,
+    String? category,
+    int? sortOrder,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => Prompt(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    content: content ?? this.content,
+    category: category ?? this.category,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  Prompt copyWithCompanion(PromptsCompanion data) {
+    return Prompt(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      content: data.content.present ? data.content.value : this.content,
+      category: data.category.present ? data.category.value : this.category,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Prompt(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('content: $content, ')
+          ..write('category: $category, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, content, category, sortOrder, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Prompt &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.content == this.content &&
+          other.category == this.category &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class PromptsCompanion extends UpdateCompanion<Prompt> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> content;
+  final Value<String> category;
+  final Value<int> sortOrder;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const PromptsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.content = const Value.absent(),
+    this.category = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PromptsCompanion.insert({
+    required String id,
+    required String name,
+    required String content,
+    this.category = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       content = Value(content),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<Prompt> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? content,
+    Expression<String>? category,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (content != null) 'content': content,
+      if (category != null) 'category': category,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PromptsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? content,
+    Value<String>? category,
+    Value<int>? sortOrder,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return PromptsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      content: content ?? this.content,
+      category: category ?? this.category,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PromptsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('content: $content, ')
+          ..write('category: $category, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ImageCompressSettingsTable extends ImageCompressSettings
+    with TableInfo<$ImageCompressSettingsTable, ImageCompressSetting> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ImageCompressSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _minSizeMeta = const VerificationMeta(
+    'minSize',
+  );
+  @override
+  late final GeneratedColumn<int> minSize = GeneratedColumn<int>(
+    'min_size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _qualityMeta = const VerificationMeta(
+    'quality',
+  );
+  @override
+  late final GeneratedColumn<int> quality = GeneratedColumn<int>(
+    'quality',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _maxWidthMeta = const VerificationMeta(
+    'maxWidth',
+  );
+  @override
+  late final GeneratedColumn<int> maxWidth = GeneratedColumn<int>(
+    'max_width',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1600),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [minSize, quality, label, maxWidth];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'image_compress_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ImageCompressSetting> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('min_size')) {
+      context.handle(
+        _minSizeMeta,
+        minSize.isAcceptableOrUnknown(data['min_size']!, _minSizeMeta),
+      );
+    }
+    if (data.containsKey('quality')) {
+      context.handle(
+        _qualityMeta,
+        quality.isAcceptableOrUnknown(data['quality']!, _qualityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_qualityMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('max_width')) {
+      context.handle(
+        _maxWidthMeta,
+        maxWidth.isAcceptableOrUnknown(data['max_width']!, _maxWidthMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {minSize};
+  @override
+  ImageCompressSetting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ImageCompressSetting(
+      minSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}min_size'],
+      )!,
+      quality: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quality'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      maxWidth: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}max_width'],
+      )!,
+    );
+  }
+
+  @override
+  $ImageCompressSettingsTable createAlias(String alias) {
+    return $ImageCompressSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class ImageCompressSetting extends DataClass
+    implements Insertable<ImageCompressSetting> {
+  /// 文件大小阈值（字节），作为主键
+  final int minSize;
+
+  /// 压缩质量（0-100），数值越低压缩率越高
+  final int quality;
+
+  /// 档位显示名称
+  final String label;
+
+  /// 最大宽度（像素），超过此宽度会等比缩放，0 表示不限制
+  final int maxWidth;
+  const ImageCompressSetting({
+    required this.minSize,
+    required this.quality,
+    required this.label,
+    required this.maxWidth,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['min_size'] = Variable<int>(minSize);
+    map['quality'] = Variable<int>(quality);
+    map['label'] = Variable<String>(label);
+    map['max_width'] = Variable<int>(maxWidth);
+    return map;
+  }
+
+  ImageCompressSettingsCompanion toCompanion(bool nullToAbsent) {
+    return ImageCompressSettingsCompanion(
+      minSize: Value(minSize),
+      quality: Value(quality),
+      label: Value(label),
+      maxWidth: Value(maxWidth),
+    );
+  }
+
+  factory ImageCompressSetting.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ImageCompressSetting(
+      minSize: serializer.fromJson<int>(json['minSize']),
+      quality: serializer.fromJson<int>(json['quality']),
+      label: serializer.fromJson<String>(json['label']),
+      maxWidth: serializer.fromJson<int>(json['maxWidth']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'minSize': serializer.toJson<int>(minSize),
+      'quality': serializer.toJson<int>(quality),
+      'label': serializer.toJson<String>(label),
+      'maxWidth': serializer.toJson<int>(maxWidth),
+    };
+  }
+
+  ImageCompressSetting copyWith({
+    int? minSize,
+    int? quality,
+    String? label,
+    int? maxWidth,
+  }) => ImageCompressSetting(
+    minSize: minSize ?? this.minSize,
+    quality: quality ?? this.quality,
+    label: label ?? this.label,
+    maxWidth: maxWidth ?? this.maxWidth,
+  );
+  ImageCompressSetting copyWithCompanion(ImageCompressSettingsCompanion data) {
+    return ImageCompressSetting(
+      minSize: data.minSize.present ? data.minSize.value : this.minSize,
+      quality: data.quality.present ? data.quality.value : this.quality,
+      label: data.label.present ? data.label.value : this.label,
+      maxWidth: data.maxWidth.present ? data.maxWidth.value : this.maxWidth,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ImageCompressSetting(')
+          ..write('minSize: $minSize, ')
+          ..write('quality: $quality, ')
+          ..write('label: $label, ')
+          ..write('maxWidth: $maxWidth')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(minSize, quality, label, maxWidth);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ImageCompressSetting &&
+          other.minSize == this.minSize &&
+          other.quality == this.quality &&
+          other.label == this.label &&
+          other.maxWidth == this.maxWidth);
+}
+
+class ImageCompressSettingsCompanion
+    extends UpdateCompanion<ImageCompressSetting> {
+  final Value<int> minSize;
+  final Value<int> quality;
+  final Value<String> label;
+  final Value<int> maxWidth;
+  const ImageCompressSettingsCompanion({
+    this.minSize = const Value.absent(),
+    this.quality = const Value.absent(),
+    this.label = const Value.absent(),
+    this.maxWidth = const Value.absent(),
+  });
+  ImageCompressSettingsCompanion.insert({
+    this.minSize = const Value.absent(),
+    required int quality,
+    required String label,
+    this.maxWidth = const Value.absent(),
+  }) : quality = Value(quality),
+       label = Value(label);
+  static Insertable<ImageCompressSetting> custom({
+    Expression<int>? minSize,
+    Expression<int>? quality,
+    Expression<String>? label,
+    Expression<int>? maxWidth,
+  }) {
+    return RawValuesInsertable({
+      if (minSize != null) 'min_size': minSize,
+      if (quality != null) 'quality': quality,
+      if (label != null) 'label': label,
+      if (maxWidth != null) 'max_width': maxWidth,
+    });
+  }
+
+  ImageCompressSettingsCompanion copyWith({
+    Value<int>? minSize,
+    Value<int>? quality,
+    Value<String>? label,
+    Value<int>? maxWidth,
+  }) {
+    return ImageCompressSettingsCompanion(
+      minSize: minSize ?? this.minSize,
+      quality: quality ?? this.quality,
+      label: label ?? this.label,
+      maxWidth: maxWidth ?? this.maxWidth,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (minSize.present) {
+      map['min_size'] = Variable<int>(minSize.value);
+    }
+    if (quality.present) {
+      map['quality'] = Variable<int>(quality.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (maxWidth.present) {
+      map['max_width'] = Variable<int>(maxWidth.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ImageCompressSettingsCompanion(')
+          ..write('minSize: $minSize, ')
+          ..write('quality: $quality, ')
+          ..write('label: $label, ')
+          ..write('maxWidth: $maxWidth')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5616,6 +6469,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BackupRecordsTable backupRecords = $BackupRecordsTable(this);
   late final $AiConfigsTable aiConfigs = $AiConfigsTable(this);
   late final $SecretsTable secrets = $SecretsTable(this);
+  late final $PromptsTable prompts = $PromptsTable(this);
+  late final $ImageCompressSettingsTable imageCompressSettings =
+      $ImageCompressSettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5632,6 +6488,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     backupRecords,
     aiConfigs,
     secrets,
+    prompts,
+    imageCompressSettings,
   ];
 }
 
@@ -5652,6 +6510,7 @@ typedef $$DealsTableCreateCompanionBuilder =
       Value<String> visualType,
       Value<String?> asciiArt,
       Value<String?> salesJson,
+      Value<int> isLowestPrice,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> revision,
@@ -5677,6 +6536,7 @@ typedef $$DealsTableUpdateCompanionBuilder =
       Value<String> visualType,
       Value<String?> asciiArt,
       Value<String?> salesJson,
+      Value<int> isLowestPrice,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> revision,
@@ -5766,6 +6626,11 @@ class $$DealsTableFilterComposer extends Composer<_$AppDatabase, $DealsTable> {
 
   ColumnFilters<String> get salesJson => $composableBuilder(
     column: $table.salesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLowestPrice => $composableBuilder(
+    column: $table.isLowestPrice,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5884,6 +6749,11 @@ class $$DealsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get isLowestPrice => $composableBuilder(
+    column: $table.isLowestPrice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5977,6 +6847,11 @@ class $$DealsTableAnnotationComposer
   GeneratedColumn<String> get salesJson =>
       $composableBuilder(column: $table.salesJson, builder: (column) => column);
 
+  GeneratedColumn<int> get isLowestPrice => $composableBuilder(
+    column: $table.isLowestPrice,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -6039,6 +6914,7 @@ class $$DealsTableTableManager
                 Value<String> visualType = const Value.absent(),
                 Value<String?> asciiArt = const Value.absent(),
                 Value<String?> salesJson = const Value.absent(),
+                Value<int> isLowestPrice = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> revision = const Value.absent(),
@@ -6062,6 +6938,7 @@ class $$DealsTableTableManager
                 visualType: visualType,
                 asciiArt: asciiArt,
                 salesJson: salesJson,
+                isLowestPrice: isLowestPrice,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 revision: revision,
@@ -6087,6 +6964,7 @@ class $$DealsTableTableManager
                 Value<String> visualType = const Value.absent(),
                 Value<String?> asciiArt = const Value.absent(),
                 Value<String?> salesJson = const Value.absent(),
+                Value<int> isLowestPrice = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> revision = const Value.absent(),
@@ -6110,6 +6988,7 @@ class $$DealsTableTableManager
                 visualType: visualType,
                 asciiArt: asciiArt,
                 salesJson: salesJson,
+                isLowestPrice: isLowestPrice,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 revision: revision,
@@ -6677,6 +7556,7 @@ typedef $$DealImagesTableCreateCompanionBuilder =
       Value<int?> compressedSize,
       Value<String?> sourceUrl,
       required DateTime updatedAt,
+      Value<int> deleted,
       Value<int> rowid,
     });
 typedef $$DealImagesTableUpdateCompanionBuilder =
@@ -6691,6 +7571,7 @@ typedef $$DealImagesTableUpdateCompanionBuilder =
       Value<int?> compressedSize,
       Value<String?> sourceUrl,
       Value<DateTime> updatedAt,
+      Value<int> deleted,
       Value<int> rowid,
     });
 
@@ -6750,6 +7631,11 @@ class $$DealImagesTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deleted => $composableBuilder(
+    column: $table.deleted,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -6812,6 +7698,11 @@ class $$DealImagesTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get deleted => $composableBuilder(
+    column: $table.deleted,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$DealImagesTableAnnotationComposer
@@ -6856,6 +7747,9 @@ class $$DealImagesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get deleted =>
+      $composableBuilder(column: $table.deleted, builder: (column) => column);
 }
 
 class $$DealImagesTableTableManager
@@ -6899,6 +7793,7 @@ class $$DealImagesTableTableManager
                 Value<int?> compressedSize = const Value.absent(),
                 Value<String?> sourceUrl = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> deleted = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DealImagesCompanion(
                 dealId: dealId,
@@ -6911,6 +7806,7 @@ class $$DealImagesTableTableManager
                 compressedSize: compressedSize,
                 sourceUrl: sourceUrl,
                 updatedAt: updatedAt,
+                deleted: deleted,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -6925,6 +7821,7 @@ class $$DealImagesTableTableManager
                 Value<int?> compressedSize = const Value.absent(),
                 Value<String?> sourceUrl = const Value.absent(),
                 required DateTime updatedAt,
+                Value<int> deleted = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DealImagesCompanion.insert(
                 dealId: dealId,
@@ -6937,6 +7834,7 @@ class $$DealImagesTableTableManager
                 compressedSize: compressedSize,
                 sourceUrl: sourceUrl,
                 updatedAt: updatedAt,
+                deleted: deleted,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -8432,6 +9330,432 @@ typedef $$SecretsTableProcessedTableManager =
       Secret,
       PrefetchHooks Function()
     >;
+typedef $$PromptsTableCreateCompanionBuilder =
+    PromptsCompanion Function({
+      required String id,
+      required String name,
+      required String content,
+      Value<String> category,
+      Value<int> sortOrder,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$PromptsTableUpdateCompanionBuilder =
+    PromptsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> content,
+      Value<String> category,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$PromptsTableFilterComposer
+    extends Composer<_$AppDatabase, $PromptsTable> {
+  $$PromptsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PromptsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PromptsTable> {
+  $$PromptsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PromptsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PromptsTable> {
+  $$PromptsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$PromptsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PromptsTable,
+          Prompt,
+          $$PromptsTableFilterComposer,
+          $$PromptsTableOrderingComposer,
+          $$PromptsTableAnnotationComposer,
+          $$PromptsTableCreateCompanionBuilder,
+          $$PromptsTableUpdateCompanionBuilder,
+          (Prompt, BaseReferences<_$AppDatabase, $PromptsTable, Prompt>),
+          Prompt,
+          PrefetchHooks Function()
+        > {
+  $$PromptsTableTableManager(_$AppDatabase db, $PromptsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PromptsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PromptsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PromptsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PromptsCompanion(
+                id: id,
+                name: name,
+                content: content,
+                category: category,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String content,
+                Value<String> category = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => PromptsCompanion.insert(
+                id: id,
+                name: name,
+                content: content,
+                category: category,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PromptsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PromptsTable,
+      Prompt,
+      $$PromptsTableFilterComposer,
+      $$PromptsTableOrderingComposer,
+      $$PromptsTableAnnotationComposer,
+      $$PromptsTableCreateCompanionBuilder,
+      $$PromptsTableUpdateCompanionBuilder,
+      (Prompt, BaseReferences<_$AppDatabase, $PromptsTable, Prompt>),
+      Prompt,
+      PrefetchHooks Function()
+    >;
+typedef $$ImageCompressSettingsTableCreateCompanionBuilder =
+    ImageCompressSettingsCompanion Function({
+      Value<int> minSize,
+      required int quality,
+      required String label,
+      Value<int> maxWidth,
+    });
+typedef $$ImageCompressSettingsTableUpdateCompanionBuilder =
+    ImageCompressSettingsCompanion Function({
+      Value<int> minSize,
+      Value<int> quality,
+      Value<String> label,
+      Value<int> maxWidth,
+    });
+
+class $$ImageCompressSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $ImageCompressSettingsTable> {
+  $$ImageCompressSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get minSize => $composableBuilder(
+    column: $table.minSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get quality => $composableBuilder(
+    column: $table.quality,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get maxWidth => $composableBuilder(
+    column: $table.maxWidth,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ImageCompressSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ImageCompressSettingsTable> {
+  $$ImageCompressSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get minSize => $composableBuilder(
+    column: $table.minSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get quality => $composableBuilder(
+    column: $table.quality,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get maxWidth => $composableBuilder(
+    column: $table.maxWidth,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ImageCompressSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ImageCompressSettingsTable> {
+  $$ImageCompressSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get minSize =>
+      $composableBuilder(column: $table.minSize, builder: (column) => column);
+
+  GeneratedColumn<int> get quality =>
+      $composableBuilder(column: $table.quality, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<int> get maxWidth =>
+      $composableBuilder(column: $table.maxWidth, builder: (column) => column);
+}
+
+class $$ImageCompressSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ImageCompressSettingsTable,
+          ImageCompressSetting,
+          $$ImageCompressSettingsTableFilterComposer,
+          $$ImageCompressSettingsTableOrderingComposer,
+          $$ImageCompressSettingsTableAnnotationComposer,
+          $$ImageCompressSettingsTableCreateCompanionBuilder,
+          $$ImageCompressSettingsTableUpdateCompanionBuilder,
+          (
+            ImageCompressSetting,
+            BaseReferences<
+              _$AppDatabase,
+              $ImageCompressSettingsTable,
+              ImageCompressSetting
+            >,
+          ),
+          ImageCompressSetting,
+          PrefetchHooks Function()
+        > {
+  $$ImageCompressSettingsTableTableManager(
+    _$AppDatabase db,
+    $ImageCompressSettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ImageCompressSettingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ImageCompressSettingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ImageCompressSettingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> minSize = const Value.absent(),
+                Value<int> quality = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<int> maxWidth = const Value.absent(),
+              }) => ImageCompressSettingsCompanion(
+                minSize: minSize,
+                quality: quality,
+                label: label,
+                maxWidth: maxWidth,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> minSize = const Value.absent(),
+                required int quality,
+                required String label,
+                Value<int> maxWidth = const Value.absent(),
+              }) => ImageCompressSettingsCompanion.insert(
+                minSize: minSize,
+                quality: quality,
+                label: label,
+                maxWidth: maxWidth,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ImageCompressSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ImageCompressSettingsTable,
+      ImageCompressSetting,
+      $$ImageCompressSettingsTableFilterComposer,
+      $$ImageCompressSettingsTableOrderingComposer,
+      $$ImageCompressSettingsTableAnnotationComposer,
+      $$ImageCompressSettingsTableCreateCompanionBuilder,
+      $$ImageCompressSettingsTableUpdateCompanionBuilder,
+      (
+        ImageCompressSetting,
+        BaseReferences<
+          _$AppDatabase,
+          $ImageCompressSettingsTable,
+          ImageCompressSetting
+        >,
+      ),
+      ImageCompressSetting,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -8458,4 +9782,8 @@ class $AppDatabaseManager {
       $$AiConfigsTableTableManager(_db, _db.aiConfigs);
   $$SecretsTableTableManager get secrets =>
       $$SecretsTableTableManager(_db, _db.secrets);
+  $$PromptsTableTableManager get prompts =>
+      $$PromptsTableTableManager(_db, _db.prompts);
+  $$ImageCompressSettingsTableTableManager get imageCompressSettings =>
+      $$ImageCompressSettingsTableTableManager(_db, _db.imageCompressSettings);
 }

@@ -10,6 +10,7 @@ import '../../../core/database/daos/deal_dao.dart';
 import '../../../core/utils/yaml_parser.dart';
 import '../../../core/utils/image_compress.dart';
 import '../../../shared/theme/antd_colors.dart';
+import '../../../shared/theme/theme_provider.dart';
 import '../providers/deals_provider.dart';
 
 /// 优惠券表单数据
@@ -63,7 +64,6 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
   final _noteController = TextEditingController();
   final _tagsController = TextEditingController();
   final _promotionsController = TextEditingController();
-  final _discountController = TextEditingController();
   final _yamlController = TextEditingController();
 
   String _visualType = 'none';
@@ -72,9 +72,18 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
   String _currency = '¥';
   bool _isLoading = false;
   bool _isEditing = false;
+  bool _isLowestPrice = false;
+
+  // 图片压缩结果信息
+  int? _imageOriginalSize;
+  int? _imageCompressedSize;
+  int? _imageQuality;
 
   // 优惠券列表
   final List<CouponFormData> _coupons = [];
+
+  // 编辑模式下原有优惠券的ID列表（用于upsert）
+  final List<int> _existingCouponIds = [];
 
   static const _uuid = Uuid();
 
@@ -103,16 +112,22 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
       _logisticsController.text = dw.deal.logistics ?? '';
       _linkController.text = dw.deal.link ?? '';
       _noteController.text = dw.deal.note ?? '';
-      _discountController.text = dw.deal.discount ?? '';
       _tagsController.text = dw.tags.join(', ');
       _promotionsController.text = dw.promotions.join('\n');
       _visualType = dw.deal.visualType;
       _imagePath = dw.image?.imagePath;
       _asciiArt = dw.deal.asciiArt;
       _currency = dw.deal.currency;
+      _isLowestPrice = dw.deal.isLowestPrice == 1;
 
-      // 加载优惠券
+      // 加载图片压缩信息
+      _imageOriginalSize = dw.image?.originalSize;
+      _imageCompressedSize = dw.image?.compressedSize;
+      _imageQuality = dw.image?.quality;
+
+      // 加载优惠券并保存原有ID
       _coupons.clear();
+      _existingCouponIds.clear();
       for (final c in dw.coupons) {
         _coupons.add(CouponFormData(
           count: c.count.toString(),
@@ -120,7 +135,9 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
           strength: c.strength,
           note: c.note ?? '',
         ));
+        _existingCouponIds.add(c.id);
       }
+      debugPrint('[DealForm] 加载优惠时读取到 ${_existingCouponIds.length} 个优惠券ID: $_existingCouponIds');
     });
   }
 
@@ -138,7 +155,6 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
     _noteController.dispose();
     _tagsController.dispose();
     _promotionsController.dispose();
-    _discountController.dispose();
     _yamlController.dispose();
     for (final c in _coupons) {
       c.dispose();
@@ -262,21 +278,23 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
           ),
           const SizedBox(height: 14),
 
-          // 展示价 + 折扣
+          // 展示价
+          _buildLabel('展示价'),
+          TextFormField(controller: _displayPriceController, decoration: _inputDecoration('1492.25', prefix: '¥'), keyboardType: TextInputType.number),
+          const SizedBox(height: 8),
+
+          // 史低标识
           Row(
             children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildLabel('展示价'),
-                  TextFormField(controller: _displayPriceController, decoration: _inputDecoration('1492.25', prefix: '¥'), keyboardType: TextInputType.number),
-                ]),
+              Checkbox(
+                value: _isLowestPrice,
+                onChanged: (v) => setState(() => _isLowestPrice = v ?? false),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildLabel('折扣'),
-                  TextFormField(controller: _discountController, decoration: _inputDecoration('如 6.6折')),
-                ]),
+              GestureDetector(
+                onTap: () => setState(() => _isLowestPrice = !_isLowestPrice),
+                child: const Text('当前为历史最低价', style: TextStyle(fontSize: 13)),
               ),
             ],
           ),
@@ -519,9 +537,24 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
         if (_visualType == 'image') ...[
           const SizedBox(height: 10),
           if (_imagePath != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.file(File(_imagePath!), height: 160, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 160, color: theme.colorScheme.surfaceContainerHighest, child: const Center(child: Text('图片加载失败')))),
+            GestureDetector(
+              onTap: () => _openImageViewer(context, _imagePath!),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  children: [
+                    Image.file(File(_imagePath!), height: 160, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 160, color: theme.colorScheme.surfaceContainerHighest, child: const Center(child: Text('图片加载失败')))),
+                    Positioned(
+                      right: 8, bottom: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.zoom_in, color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           const SizedBox(height: 8),
           Row(
@@ -622,7 +655,6 @@ source:
         _logisticsController.text = parsed.logistics ?? '';
         _linkController.text = parsed.link ?? '';
         _noteController.text = parsed.note ?? '';
-        _discountController.text = parsed.discount ?? '';
         _tagsController.text = parsed.tags.join(', ');
         _promotionsController.text = parsed.promotions.join('\n');
         _visualType = parsed.visualType;
@@ -654,8 +686,19 @@ source:
     final xfile = await picker.pickImage(source: source, maxWidth: 1600);
     if (xfile == null) return;
 
-    final result = await ImageUtils.prepareImage(File(xfile.path));
-    if (result != null) setState(() => _imagePath = result.filePath);
+    final compressDao = ref.read(imageCompressSettingsDaoProvider);
+    final result = await ImageUtils.prepareImage(
+      File(xfile.path),
+      compressDao: compressDao,
+    );
+    if (result != null) {
+      setState(() {
+        _imagePath = result.filePath;
+        _imageOriginalSize = result.originalSize;
+        _imageCompressedSize = result.compressedSize;
+        _imageQuality = result.quality;
+      });
+    }
   }
 
   // ===== Save =====
@@ -668,11 +711,16 @@ source:
       final id = widget.dealId ?? _uuid.v4();
       final now = DateTime.now();
 
+      debugPrint('[DealForm] 开始保存优惠, dealId: $id, isEditing: $_isEditing');
+
       final tags = _tagsController.text.split(RegExp(r'[,，]')).map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
       final promotions = _promotionsController.text.split('\n').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
 
-      // 构建优惠券
+      debugPrint('[DealForm] 标签数: ${tags.length}, 促销数: ${promotions.length}');
+
+      // 构建优惠券 - 编辑模式下需要保留原有ID进行upsert
       final coupons = <Coupon>[];
+      debugPrint('[DealForm] 处理优惠券, 表单数量: ${_coupons.length}');
       for (var i = 0; i < _coupons.length; i++) {
         final c = _coupons[i];
         final count = int.tryParse(c.countController.text) ?? 1;
@@ -680,8 +728,30 @@ source:
         final strength = c.strengthController.text.trim();
         final note = c.noteController.text.trim();
         if (strength.isNotEmpty || source.isNotEmpty) {
-          coupons.add(Coupon(id: 0, dealId: id, sortOrder: i, count: count, source: source, strength: strength, note: note.isEmpty ? null : note));
+          // 编辑模式下尝试获取原有优惠券ID
+          int couponId = 0;
+          if (_isEditing && i < _existingCouponIds.length) {
+            couponId = _existingCouponIds[i];
+            debugPrint('[DealForm] 优惠券 $i 使用原有ID: $couponId');
+          }
+          coupons.add(Coupon(
+            id: couponId,
+            dealId: id,
+            sortOrder: i,
+            count: count,
+            source: source,
+            strength: strength,
+            note: note.isEmpty ? null : note,
+          ));
         }
+      }
+      debugPrint('[DealForm] 有效优惠券数: ${coupons.length}');
+
+      final originalPrice = _originalPriceController.text.isNotEmpty ? double.tryParse(_originalPriceController.text) : null;
+      final currentPrice = double.parse(_currentPriceController.text);
+      String? discount;
+      if (originalPrice != null && originalPrice > 0 && currentPrice > 0) {
+        discount = '${(currentPrice / originalPrice * 10).toStringAsFixed(1)}折';
       }
 
       final deal = Deal(
@@ -689,16 +759,17 @@ source:
         title: _titleController.text.trim(),
         platform: _platformController.text.trim().isEmpty ? '其他' : _platformController.text.trim(),
         category: _categoryController.text.trim().isEmpty ? '其他' : _categoryController.text.trim(),
-        currentPrice: double.parse(_currentPriceController.text),
-        originalPrice: _originalPriceController.text.isNotEmpty ? double.tryParse(_originalPriceController.text) : null,
+        currentPrice: currentPrice,
+        originalPrice: originalPrice,
         displayPrice: _displayPriceController.text.isNotEmpty ? double.tryParse(_displayPriceController.text) : null,
         currency: _currency,
-        discount: _discountController.text.isNotEmpty ? _discountController.text : null,
+        discount: discount,
         logistics: _logisticsController.text.isNotEmpty ? _logisticsController.text : null,
         link: _linkController.text.isNotEmpty ? _linkController.text : null,
         note: _noteController.text.isNotEmpty ? _noteController.text : null,
         visualType: _visualType,
         asciiArt: _visualType == 'ascii' ? _asciiArt : null,
+        isLowestPrice: _isLowestPrice ? 1 : 0,
         createdAt: now,
         updatedAt: now,
         revision: 1,
@@ -709,7 +780,15 @@ source:
       if (_visualType == 'image' && _imagePath != null) {
         final file = File(_imagePath!);
         if (file.existsSync()) {
-          dealImage = DealImage(dealId: id, imagePath: _imagePath!, updatedAt: now);
+          dealImage = DealImage(
+            dealId: id,
+            imagePath: _imagePath!,
+            originalSize: _imageOriginalSize,
+            compressedSize: _imageCompressedSize ?? await file.length(),
+            quality: _imageQuality,
+            updatedAt: now,
+            deleted: 0,
+          );
         }
       }
 
@@ -726,5 +805,37 @@ source:
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _openImageViewer(BuildContext context, String imagePath) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Image.file(
+                File(imagePath),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(Icons.broken_image, color: Colors.white38, size: 64),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

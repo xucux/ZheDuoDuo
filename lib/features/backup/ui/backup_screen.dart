@@ -6,12 +6,16 @@
 // - 从 zip 文件导入备份
 // - 备份历史列表（查看详情/分享/删除）
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/utils/image_compress.dart';
+import '../../../core/utils/logger_util.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../deals/providers/deals_provider.dart';
 import '../providers/backup_provider.dart';
 
 class BackupScreen extends ConsumerStatefulWidget {
@@ -89,6 +93,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
           data: (stats) {
             final dbSize = stats['dbSize'] ?? 0;
             final imgSize = stats['imgSize'] ?? 0;
+            final imgCount = stats['imgCount'] ?? 0;
             final totalSize = stats['totalSize'] ?? 0;
 
             return Column(
@@ -105,9 +110,18 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                 const SizedBox(height: 12),
                 _buildStatRow(context, '数据库', _formatSize(dbSize)),
                 const SizedBox(height: 8),
-                _buildStatRow(context, '图片', _formatSize(imgSize)),
+                _buildStatRow(context, '图片', '${_formatSize(imgSize)}（$imgCount 张）'),
                 const Divider(height: 24),
                 _buildStatRow(context, '总计', _formatSize(totalSize), isBold: true),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _cleanupOrphanedImages(context),
+                    icon: const Icon(Icons.cleaning_services_outlined, size: 18),
+                    label: const Text('清理未引用图片'),
+                  ),
+                ),
               ],
             );
           },
@@ -301,6 +315,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         trailing: PopupMenuButton(
           icon: Icon(Icons.more_vert, size: 18, color: theme.colorScheme.onSurfaceVariant),
           itemBuilder: (ctx) => [
+            const PopupMenuItem(value: 'restore', child: Text('恢复到此版本')),
             const PopupMenuItem(value: 'share', child: Text('分享')),
             const PopupMenuItem(value: 'delete', child: Text('删除', style: TextStyle(color: Colors.red))),
           ],
@@ -430,6 +445,9 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
 
   void _handleBackupAction(BuildContext context, String action, BackupInfo backup) {
     switch (action) {
+      case 'restore':
+        _restoreBackup(context, backup);
+        break;
       case 'share':
         Share.shareXFiles([XFile(backup.filePath)]);
         break;
@@ -465,6 +483,70 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _restoreBackup(BuildContext context, BackupInfo backup) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('恢复备份'),
+        content: const Text('恢复将覆盖当前所有数据，确定继续吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确定恢复', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isImporting = true);
+
+    try {
+      final service = ref.read(backupServiceProvider);
+      final result = await service.importBackup(backup.filePath);
+
+      if (mounted) {
+        if (result.success) {
+          ref.invalidate(backupListProvider);
+          ref.invalidate(backupStatsProvider);
+
+          _showSnackBar('恢复成功，共 ${result.dealCount ?? '?'} 条记录');
+
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text('恢复完成'),
+              content: const Text('需要重启应用以加载恢复的数据。'),
+              actions: [
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                  child: const Text('确定'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          _showSnackBar('恢复失败: ${result.error}');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('恢复失败: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+    }
   }
 
   void _showBackupInfo(BuildContext context, BackupInfo backup) {
@@ -507,6 +589,17 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
               const SizedBox(height: 20),
               Row(
                 children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _restoreBackup(context, backup);
+                      },
+                      icon: const Icon(Icons.restore, size: 16),
+                      label: const Text('恢复'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
@@ -560,6 +653,55 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  Future<void> _cleanupOrphanedImages(BuildContext context) async {
+    final dealDao = ref.read(dealDaoProvider);
+    final deletedEntries = await dealDao.getDeletedImagePaths();
+
+    if (deletedEntries.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有需要清理的孤立图片')),
+      );
+      return;
+    }
+
+    final totalSize = deletedEntries.fold<int>(0, (s, e) {
+      final f = File(e.imagePath);
+      return s + (f.existsSync() ? f.lengthSync() : 0);
+    });
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清理未引用图片'),
+        content: Text(
+          '发现 ${deletedEntries.length} 个已标记删除的图片文件\n'
+          '预计释放空间: ${ImageUtils.formatFileSize(totalSize)}\n\n'
+          '此操作不可撤销，是否继续？',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('开始清理')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final paths = deletedEntries.map((e) => e.imagePath).toList();
+    final result = await ImageUtils.cleanupOrphanedImages(paths);
+
+    await dealDao.purgeDeletedImages();
+
+    if (!context.mounted) return;
+    AppLogger.instance.i('清理孤立图片: 删除${result.deletedCount}个文件，释放${ImageUtils.formatFileSize(result.freedBytes)}');
+
+    ref.invalidate(backupStatsProvider);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已清理 ${result.deletedCount} 个孤立图片，释放 ${ImageUtils.formatFileSize(result.freedBytes)}')),
+    );
   }
 
   void _showSnackBar(String message, {SnackBarAction? action}) {

@@ -1,8 +1,19 @@
+// 折多多应用主题配置
+//
+// 基于 Ant Design 5.0 设计规范，提供亮色和暗色两套主题。
+// 涵盖 ColorScheme、文字主题、AppBar、Card、NavigationBar、
+// Input、Chip、Dialog、BottomSheet、SnackBar、Button 等组件样式。
+// 所有颜色值来自 AntdColors 色板定义。
+
 import 'package:flutter/material.dart';
 import 'antd_colors.dart';
 
 /// 折多多主题 - 基于 Ant Design 5.0 设计规范
+///
+/// 提供 [lightTheme] 和 [darkTheme] 两套完整的 ThemeData，
+/// 统一管理应用的全局视觉风格。
 class AppTheme {
+  /// 亮色主题
   static ThemeData lightTheme() {
     // AntdColors used directly
 
@@ -43,6 +54,7 @@ class AppTheme {
     return _buildTheme(colorScheme, Brightness.light);
   }
 
+  /// 暗色主题
   static ThemeData darkTheme() {
     // AntdColors used directly
 
@@ -83,6 +95,7 @@ class AppTheme {
     return _buildTheme(colorScheme, Brightness.dark);
   }
 
+  /// 根据亮暗模式构建完整 ThemeData
   static ThemeData _buildTheme(ColorScheme colorScheme, Brightness brightness) {
     final isLight = brightness == Brightness.light;
 

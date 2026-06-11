@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,7 +24,6 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       body: SafeArea(
         child: Column(
           children: [
@@ -52,10 +53,7 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(bottom: BorderSide(color: theme.dividerColor, width: 0.5)),
-      ),
+      color: theme.colorScheme.surface,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -69,7 +67,7 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
           ),
           Row(
             children: [
-              _buildHeaderIcon(context, icon: filters.displayMode == 'simple' ? Icons.view_agenda_outlined : Icons.grid_view_outlined, onTap: () => ref.read(dealFiltersProvider.notifier).setDisplayMode(filters.displayMode == 'simple' ? 'normal' : 'simple')),
+              _buildHeaderIcon(context, icon: filters.displayMode == 'grid' ? Icons.view_agenda_outlined : Icons.grid_view_outlined, onTap: () => ref.read(dealFiltersProvider.notifier).setDisplayMode(filters.displayMode == 'grid' ? 'normal' : 'grid')),
               const SizedBox(width: 4),
               _buildHeaderIcon(context, icon: Icons.search, onTap: () => context.push('/search')),
               const SizedBox(width: 4),
@@ -99,7 +97,7 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     final theme = Theme.of(context);
     return Container(
       height: 44,
-      decoration: BoxDecoration(color: theme.colorScheme.surface, border: Border(bottom: BorderSide(color: theme.dividerColor, width: 0.5))),
+      color: theme.colorScheme.surface,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -151,12 +149,25 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
 
   // ===== Deal List =====
   Widget _buildDealList(BuildContext context, List<DealWithDetails> deals, String displayMode) {
+    if (displayMode == 'grid') {
+      return GridView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+          childAspectRatio: 1.3,
+        ),
+        itemCount: deals.length,
+        itemBuilder: (context, index) => _buildGridDealCard(context, deals[index]),
+      );
+    }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       itemCount: deals.length,
       itemBuilder: (context, index) {
         final dw = deals[index];
-        return displayMode == 'simple' ? _buildSimpleDealCard(context, dw) : _buildNormalDealCard(context, dw);
+        return _buildNormalDealCard(context, dw);
       },
     );
   }
@@ -224,6 +235,33 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
                       ],
                     ],
                   ),
+                  const SizedBox(height: 4),
+                  // 创建时间 + 史低标识
+                  Row(
+                    children: [
+                      Text(
+                        _formatDateShort(deal.createdAt),
+                        style: TextStyle(fontSize: 10, color: theme.colorScheme.outline),
+                      ),
+                      const Spacer(),
+                      if (deal.isLowestPrice == 1)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: const Text(
+                            '史低',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -233,58 +271,99 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     );
   }
 
-  // ===== Simple Card =====
-  Widget _buildSimpleDealCard(BuildContext context, DealWithDetails dw) {
+  // ===== Grid Card (2-column) =====
+  Widget _buildGridDealCard(BuildContext context, DealWithDetails dw) {
     final deal = dw.deal;
     final theme = Theme.of(context);
     final hasDiscount = deal.originalPrice != null && deal.originalPrice! > deal.currentPrice;
-    final savings = hasDiscount ? (deal.originalPrice! - deal.currentPrice) : 0.0;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Slidable(
-        key: ValueKey(deal.id),
-        endActionPane: ActionPane(
-          motion: const BehindMotion(),
-          children: [
-            SlidableAction(onPressed: (_) => context.push('/deal/${deal.id}/edit'), backgroundColor: Colors.blue, foregroundColor: Colors.white, icon: Icons.edit, label: '编辑'),
-            SlidableAction(onPressed: (_) => _confirmDelete(context, deal.id), backgroundColor: Colors.red, foregroundColor: Colors.white, icon: Icons.delete, label: '删除'),
-          ],
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: theme.dividerColor.withValues(alpha: 0.5), width: 0.5),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => context.push('/deal/${deal.id}'),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Line 1: Title
-                  Text(deal.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface)),
-                  const SizedBox(height: 4),
-                  // Line 2: Price row
-                  Row(
-                    children: [
-                      _buildPlatformBadge(context, deal.platform),
-                      const Spacer(),
-                      if (hasDiscount) ...[
-                        Text('原${deal.currency}${deal.originalPrice!.toStringAsFixed(0)}', style: TextStyle(fontSize: 11, color: theme.colorScheme.outline, decoration: TextDecoration.lineThrough)),
-                        const SizedBox(width: 4),
-                        Text('省${deal.currency}${savings.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.discountText)),
-                        const SizedBox(width: 6),
-                      ],
-                      Text('${deal.currency}${deal.currentPrice.toStringAsFixed(2)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.brandColor)),
-                    ],
-                  ),
-                ],
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.5), width: 0.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/deal/${deal.id}'),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(deal.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, height: 1.3, color: theme.colorScheme.onSurface)),
+              const SizedBox(height: 4),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // 左侧：平台、券、价格
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Row(
+                            children: [
+                              _buildPlatformBadge(context, deal.platform),
+                              if (dw.coupons.isNotEmpty) ...[
+                                const SizedBox(width: 4),
+                                Text('券x${dw.coupons.length}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFFE65100))),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('${deal.currency}${deal.currentPrice.toStringAsFixed(2)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.brandColor)),
+                              if (hasDiscount) ...[
+                                const SizedBox(width: 4),
+                                Text('${deal.currency}${deal.originalPrice!.toStringAsFixed(0)}', style: TextStyle(fontSize: 10, color: theme.colorScheme.outline, decoration: TextDecoration.lineThrough)),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // 右侧：缩略图或缩略 ASCII
+                    if (dw.image != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.file(
+                          File(dw.image!.imagePath),
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox(width: 48, height: 48),
+                        ),
+                      )
+                    else if (deal.asciiArt != null && deal.asciiArt!.isNotEmpty)
+                      Container(
+                        width: 48,
+                        height: 48,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          deal.asciiArt!,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 5,
+                            height: 1.0,
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -356,6 +435,10 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     return '${(current / original * 10).toStringAsFixed(1)}折';
   }
 
+  String _formatDateShort(DateTime dt) {
+    return '${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+  }
+
   String _getSortLabel(String sortBy) {
     switch (sortBy) {
       case 'price': return '价格';
@@ -370,6 +453,7 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      showDragHandle: false,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => DraggableScrollableSheet(initialChildSize: 0.5, minChildSize: 0.3, maxChildSize: 0.8, expand: false, builder: (context, scrollController) => _FilterSheet(scrollController: scrollController)),
     );
@@ -379,6 +463,7 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     ref.read(platformsProvider).whenData((platforms) {
       showModalBottomSheet(
         context: context,
+        showDragHandle: false,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
         builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Padding(padding: EdgeInsets.all(16), child: Text('选择平台', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
@@ -394,6 +479,7 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     ref.read(categoriesProvider).whenData((categories) {
       showModalBottomSheet(
         context: context,
+        showDragHandle: false,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
         builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Padding(padding: EdgeInsets.all(16), child: Text('选择分类', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
@@ -408,6 +494,7 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
   void _showSortPicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      showDragHandle: false,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Padding(padding: EdgeInsets.all(16), child: Text('排序方式', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
@@ -445,19 +532,43 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
   }
 }
 
-class _FilterSheet extends ConsumerWidget {
+class _FilterSheet extends ConsumerStatefulWidget {
   final ScrollController scrollController;
   const _FilterSheet({required this.scrollController});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends ConsumerState<_FilterSheet> {
+  Future<void> _pickCustomDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: now,
+      initialDateRange: DateTimeRange(start: now.subtract(const Duration(days: 30)), end: now),
+    );
+    if (picked != null) {
+      ref.read(dealFiltersProvider.notifier).setDateRange(picked);
+    }
+  }
+
+  String _dateRangeLabel(DateTimeRange range) {
+    final s = '${range.start.month}/${range.start.day}';
+    final e = '${range.end.month}/${range.end.day}';
+    return '$s - $e';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final filters = ref.watch(dealFiltersProvider);
     final platformsAsync = ref.watch(platformsProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final theme = Theme.of(context);
 
     return ListView(
-      controller: scrollController,
+      controller: widget.scrollController,
       padding: const EdgeInsets.all(16),
       children: [
         Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: theme.colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)))),
@@ -486,6 +597,23 @@ class _FilterSheet extends ConsumerWidget {
           error: (_, __) => const SizedBox.shrink(),
         ),
         const SizedBox(height: 16),
+        Text('时间范围', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: theme.colorScheme.onSurface)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 6, children: [
+          _buildSheetChip(context, ref, '全部时间', selected: filters.dateRange == null, onTap: () => ref.read(dealFiltersProvider.notifier).setDateRange(null)),
+          _buildSheetChip(context, ref, '最近一个月', selected: _isPresetRange(filters.dateRange, 30), onTap: () => ref.read(dealFiltersProvider.notifier).setDateRange(_presetRange(30))),
+          _buildSheetChip(context, ref, '最近三个月', selected: _isPresetRange(filters.dateRange, 90), onTap: () => ref.read(dealFiltersProvider.notifier).setDateRange(_presetRange(90))),
+          _buildSheetChip(context, ref, '最近半年', selected: _isPresetRange(filters.dateRange, 180), onTap: () => ref.read(dealFiltersProvider.notifier).setDateRange(_presetRange(180))),
+          _buildSheetChip(context, ref, '一年内', selected: _isPresetRange(filters.dateRange, 365), onTap: () => ref.read(dealFiltersProvider.notifier).setDateRange(_presetRange(365))),
+          _buildSheetChip(context, ref, '两年内', selected: _isPresetRange(filters.dateRange, 730), onTap: () => ref.read(dealFiltersProvider.notifier).setDateRange(_presetRange(730))),
+          _buildSheetChip(
+            context, ref,
+            filters.dateRange != null && !_isAnyPreset(filters.dateRange) ? _dateRangeLabel(filters.dateRange!) : '自定义',
+            selected: filters.dateRange != null && !_isAnyPreset(filters.dateRange),
+            onTap: _pickCustomDateRange,
+          ),
+        ]),
+        const SizedBox(height: 16),
         Text('排序', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: theme.colorScheme.onSurface)),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 6, children: [
@@ -499,6 +627,25 @@ class _FilterSheet extends ConsumerWidget {
         SizedBox(width: double.infinity, child: FilledButton.tonal(onPressed: () => ref.read(dealFiltersProvider.notifier).reset(), child: const Text('重置筛选'))),
       ],
     );
+  }
+
+  DateTimeRange? _presetRange(int days) {
+    final end = DateTime.now();
+    final start = end.subtract(Duration(days: days));
+    return DateTimeRange(start: DateTime(start.year, start.month, start.day), end: DateTime(end.year, end.month, end.day, 23, 59, 59));
+  }
+
+  bool _isPresetRange(DateTimeRange? range, int days) {
+    if (range == null) return false;
+    final expected = _presetRange(days);
+    if (expected == null) return false;
+    final duration = range.end.difference(range.start).inDays;
+    return duration >= days - 1 && duration <= days + 1;
+  }
+
+  bool _isAnyPreset(DateTimeRange? range) {
+    if (range == null) return false;
+    return _isPresetRange(range, 30) || _isPresetRange(range, 90) || _isPresetRange(range, 180) || _isPresetRange(range, 365) || _isPresetRange(range, 730);
   }
 
   Widget _buildSheetChip(BuildContext context, WidgetRef ref, String label, {required bool selected, required VoidCallback onTap}) {

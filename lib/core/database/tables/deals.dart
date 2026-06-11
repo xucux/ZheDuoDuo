@@ -3,6 +3,7 @@
 // 存储优惠商品的核心信息，包括标题、价格、平台、分类、折扣等。
 // deleted 字段用于软删除：0=正常，2=待删除。
 // revision 字段用于云同步的版本控制。
+// isLowestPrice 字段标识当前价格是否为历史最低：0=否，1=是。
 
 import 'package:drift/drift.dart';
 
@@ -23,6 +24,7 @@ class Deals extends Table {
   TextColumn get visualType => text().withDefault(const Constant('none'))();
   TextColumn get asciiArt => text().nullable()();
   TextColumn get salesJson => text().nullable()();
+  IntColumn get isLowestPrice => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   IntColumn get revision => integer().withDefault(const Constant(1))();

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +16,7 @@ class _AboutScreenState extends State<AboutScreen> {
   String _version = '';
   String _buildNumber = '';
   bool _checking = false;
+  bool _historyLoading = false;
   List<Map<String, dynamic>>? _releaseList;
   String? _error;
 
@@ -45,20 +48,27 @@ class _AboutScreenState extends State<AboutScreen> {
     }
   }
 
-  Future<void> _fetchReleaseList() async {
+  Future<void> _fetchReleaseList({bool isHistory = false}) async {
+    final setLoading = isHistory ? (bool v) => _historyLoading = v : (bool v) => _checking = v;
     setState(() {
-      _checking = true;
+      setLoading(true);
       _error = null;
     });
 
     try {
       final dio = Dio();
-      final response = await dio.get(_updateUrl);
+      final response = await dio.get(
+        _updateUrl,
+        options: Options(responseType: ResponseType.plain),
+      );
       if (response.statusCode == 200) {
-        final raw = response.data;
+        final rawString = response.data is String
+            ? response.data as String
+            : jsonEncode(response.data);
+        final decoded = jsonDecode(rawString);
         final List<Map<String, dynamic>> list;
-        if (raw is List) {
-          list = raw.cast<Map<String, dynamic>>();
+        if (decoded is List) {
+          list = decoded.cast<Map<String, dynamic>>();
         } else {
           list = [];
         }
@@ -68,22 +78,22 @@ class _AboutScreenState extends State<AboutScreen> {
         if (mounted) {
           setState(() {
             _releaseList = list;
-            _checking = false;
+            setLoading(false);
           });
         }
       } else {
         if (mounted) {
           setState(() {
             _error = '检查更新失败 (${response.statusCode})';
-            _checking = false;
+            setLoading(false);
           });
         }
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
-          _error = '网络错误，请稍后重试';
-          _checking = false;
+          _error = '获取失败: ${e.toString()}';
+          setLoading(false);
         });
       }
     }
@@ -173,10 +183,15 @@ class _AboutScreenState extends State<AboutScreen> {
 
   void _showReleaseHistory() async {
     if (_releaseList == null) {
-      await _fetchReleaseList();
+      await _fetchReleaseList(isHistory: true);
     }
-    if (!mounted || _releaseList == null || _releaseList!.isEmpty) {
-      if (mounted) {
+    if (!mounted) return;
+    if (_releaseList == null || _releaseList!.isEmpty) {
+      if (_error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_error!)),
+        );
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('暂时无法获取更新历史')),
         );
@@ -316,16 +331,39 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                     if (_version.isNotEmpty) ...[
                       const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: _showReleaseHistory,
-                        child: Text(
-                          '更新历史',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.primary,
-                            decoration: TextDecoration.underline,
-                          ),
+                      if (_historyLoading)
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 1.5),
+                        )
+                      else
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: _showReleaseHistory,
+                              child: Text(
+                                '更新历史',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text('|', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => _launchUrl('https://github.com/xucux/ZheDuoDuo/discussions'),
+                              child: Text(
+                                '反馈',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
                     ],
                   ],
                 ),

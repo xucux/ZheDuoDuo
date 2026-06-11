@@ -7,12 +7,10 @@
 // - 模拟发送消息（原型演示）
 // - AI 配置从数据库加载，会话数据保存在 SharedPreferences
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_image_compress_platform_interface/flutter_image_compress_platform_interface.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -20,14 +18,46 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../shared/theme/antd_colors.dart';
 import '../../../shared/theme/theme_provider.dart';
+import '../../mcp/providers/mcp_provider.dart';
+import '../../ocr/services/ocr_service.dart';
 import '../models/ai_chat_models.dart';
 import '../services/ai_chat_service.dart';
+import '../services/ai_api_service.dart';
 
 class AiScreen extends ConsumerStatefulWidget {
   const AiScreen({super.key});
 
   @override
   ConsumerState<AiScreen> createState() => _AiScreenState();
+}
+
+class _PendingImageInfo {
+  final String path;
+  final String? ocrText;
+  final bool ocrDone;
+
+  const _PendingImageInfo({
+    required this.path,
+    this.ocrText,
+    this.ocrDone = false,
+  });
+}
+
+/// 流式消息临时数据
+///
+/// 用于实时存储推理过程和正式回复内容。
+class _StreamingMessage {
+  final String id;
+  String reasoningContent;
+  String content;
+  bool isDone;
+
+  _StreamingMessage({
+    required this.id,
+    this.reasoningContent = '',
+    this.content = '',
+    this.isDone = false,
+  });
 }
 
 class _AiScreenState extends ConsumerState<AiScreen> {
@@ -49,23 +79,37 @@ class _AiScreenState extends ConsumerState<AiScreen> {
   /// 是否显示历史会话面板
   bool _showHistory = false;
 
+  /// 推理内容展开状态（key 为消息 ID）
+  final Map<String, bool> _reasoningExpanded = {};
+
+  /// 流式消息临时存储（key 为临时消息 ID）
+  ///
+  /// 用于实时显示推理过程和回复内容，流式结束后会保存到会话并清空。
+  final Map<String, _StreamingMessage> _streamingMessages = {};
+
   /// AI 对话设置
   AiChatSettings _settings = const AiChatSettings();
 
   /// 图片选择器
   final _imagePicker = ImagePicker();
 
-  /// 已选择的待发送图片路径列表
-  final List<String> _pendingImages = [];
+  /// 已选择的待发送图片列表（含 OCR 结果）
+  final List<_PendingImageInfo> _pendingImages = [];
 
   @override
   void initState() {
     super.initState();
+    _inputController.addListener(_onInputChanged);
     _loadData();
+  }
+
+  void _onInputChanged() {
+    setState(() {});
   }
 
   @override
   void dispose() {
+    _inputController.removeListener(_onInputChanged);
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -73,11 +117,11 @@ class _AiScreenState extends ConsumerState<AiScreen> {
 
   /// 从数据库和 SharedPreferences 加载会话和设置
   Future<void> _loadData() async {
-    // 从数据库加载 AI 配置
+    // 从数据库加载 AI 配置（获取当前激活的服务商）
     final aiConfigDao = ref.read(aiConfigDaoProvider);
     final secretsDao = ref.read(secretsDaoProvider);
     final config = await aiConfigDao.ensureDefaultConfig();
-    final apiKey = await secretsDao.getValue('ai', 'api_key') ?? '';
+    final apiKey = await secretsDao.getValue('ai', 'api_key', entityId: config.id) ?? '';
 
     // 从 SharedPreferences 加载会话数据
     final prefs = await SharedPreferences.getInstance();
@@ -151,7 +195,6 @@ class _AiScreenState extends ConsumerState<AiScreen> {
       AiProtocol.openaiResponses => 'OpenAI Responses',
       AiProtocol.openaiChat => 'OpenAI Chat',
       AiProtocol.anthropic => 'Anthropic',
-      AiProtocol.githubCopilot => 'GitHub Copilot',
     };
     final modelLabel =
         _settings.model.isNotEmpty ? '· ${_settings.model}' : '';
@@ -440,18 +483,170 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     ThemeData theme,
     ChatSession session,
   ) {
+    // 合并会话消息和流式消息
+    final messages = List<ChatMessage>.from(session.messages);
+    final streamingList = _streamingMessages.values.toList();
+
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      itemCount: session.messages.length + (_sending ? 1 : 0),
+      itemCount: messages.length + streamingList.length + (_sending && _streamingMessages.isEmpty ? 1 : 0),
       itemBuilder: (ctx, idx) {
-        // 正在发送时显示加载指示器
-        if (idx == session.messages.length) {
-          return _buildTypingIndicator(theme);
+        // 先显示历史消息
+        if (idx < messages.length) {
+          final msg = messages[idx];
+          return _buildMessageBubble(context, theme, msg);
         }
-        final msg = session.messages[idx];
-        return _buildMessageBubble(context, theme, msg);
+        // 再显示流式消息
+        final streamingIdx = idx - messages.length;
+        if (streamingIdx < streamingList.length) {
+          final streaming = streamingList[streamingIdx];
+          return _buildStreamingBubble(context, theme, streaming);
+        }
+        // 最后显示加载指示器（仅在没有流式消息时）
+        return _buildTypingIndicator(theme);
       },
+    );
+  }
+
+  /// 构建流式消息气泡
+  Widget _buildStreamingBubble(
+    BuildContext context,
+    ThemeData theme,
+    _StreamingMessage msg,
+  ) {
+    final hasReasoning = msg.reasoningContent.isNotEmpty;
+    final hasContent = msg.content.isNotEmpty;
+    final isExpanded = _reasoningExpanded[msg.id] ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.82,
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(14),
+                topRight: Radius.circular(14),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(14),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 推理过程（可折叠）
+                if (hasReasoning) ...[
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _reasoningExpanded[msg.id] = !isExpanded;
+                      });
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isExpanded ? Icons.expand_less : Icons.expand_more,
+                                size: 14,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isExpanded ? '隐藏推理过程' : '查看推理过程',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                              if (!msg.isDone) ...[
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 10,
+                                  height: 10,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (isExpanded) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              msg.reasoningContent,
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.5,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                // 正式回复内容
+                if (hasContent)
+                  Text(
+                    msg.content,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                // 加载中提示（无内容时）
+                if (!hasContent && !hasReasoning)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '思考中...',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -462,6 +657,8 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     ChatMessage msg,
   ) {
     final isUser = msg.role == ChatMessageRole.user;
+    final hasReasoning = !isUser && msg.reasoningContent != null && msg.reasoningContent!.isNotEmpty;
+    final isExpanded = _reasoningExpanded[msg.id] ?? false;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -471,77 +668,144 @@ class _AiScreenState extends ConsumerState<AiScreen> {
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.82,
           ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isUser ? AntdColors.primary : theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(14),
-                topRight: const Radius.circular(14),
-                bottomLeft: isUser
-                    ? const Radius.circular(14)
-                    : const Radius.circular(4),
-                bottomRight: isUser
-                    ? const Radius.circular(4)
-                    : const Radius.circular(14),
+          child: GestureDetector(
+            onLongPress: msg.content.isNotEmpty
+                ? () {
+                    Clipboard.setData(ClipboardData(text: msg.content));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已复制')),
+                    );
+                  }
+                : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isUser ? AntdColors.primary : theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(14),
+                  topRight: const Radius.circular(14),
+                  bottomLeft: isUser
+                      ? const Radius.circular(14)
+                      : const Radius.circular(4),
+                  bottomRight: isUser
+                      ? const Radius.circular(4)
+                      : const Radius.circular(14),
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // 图片（如果有）
-                if (msg.imagePaths.isNotEmpty) ...[
-                  ...msg.imagePaths.map((path) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        File(path),
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: 160,
-                        errorBuilder: (_, __, ___) => Container(
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: isUser
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : theme.colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Center(
-                            child: Icon(Icons.broken_image_outlined,
-                                color: theme.colorScheme.outline),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // 图片（如果有）
+                  if (msg.imagePaths.isNotEmpty) ...[
+                    ...msg.imagePaths.map((path) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(path),
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: 160,
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: isUser
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Icon(Icons.broken_image_outlined,
+                                  color: theme.colorScheme.outline),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  )),
-                  const SizedBox(height: 4),
-                ],
-                // 消息内容
-                if (msg.content.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      msg.content,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: isUser ? Colors.white : theme.colorScheme.onSurface,
+                    )),
+                    const SizedBox(height: 4),
+                  ],
+                  // 推理过程（可折叠，仅 assistant 消息）
+                  if (hasReasoning) ...[
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _reasoningExpanded[msg.id] = !isExpanded;
+                        });
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isExpanded ? Icons.expand_less : Icons.expand_more,
+                                  size: 14,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  isExpanded ? '隐藏推理过程' : '查看推理过程',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (isExpanded) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                msg.reasoningContent!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1.5,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
+                  ],
+                  // 消息内容
+                  if (msg.content.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        msg.content,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: isUser ? Colors.white : theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  // 时间戳
+                  Text(
+                    _formatTime(msg.createdAt),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isUser
+                          ? Colors.white.withValues(alpha: 0.6)
+                          : theme.colorScheme.outline,
+                    ),
                   ),
-                // 时间戳
-                Text(
-                  _formatTime(msg.createdAt),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: isUser
-                        ? Colors.white.withValues(alpha: 0.6)
-                        : theme.colorScheme.outline,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -616,39 +880,77 @@ class _AiScreenState extends ConsumerState<AiScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 待发送图片预览
+          // 待发送图片预览（含 OCR 结果）
           if (_pendingImages.isNotEmpty)
             SizedBox(
-              height: 60,
+              height: 90,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.only(bottom: 4),
                 itemCount: _pendingImages.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 6),
                 itemBuilder: (ctx, idx) {
-                  return Stack(
+                  final img = _pendingImages[idx];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(_pendingImages[idx]),
-                          width: 56,
-                          height: 56,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      Positioned(
-                        top: -4,
-                        right: -4,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _pendingImages.removeAt(idx)),
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: Colors.black54,
-                              shape: BoxShape.circle,
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(img.path),
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
                             ),
-                            child: const Icon(Icons.close, size: 12, color: Colors.white),
+                          ),
+                          if (!img.ocrDone)
+                            const Positioned(
+                              bottom: 2,
+                              right: 2,
+                              child: SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          if (img.ocrDone && img.ocrText != null && img.ocrText!.isNotEmpty)
+                            const Positioned(
+                              bottom: 2,
+                              right: 2,
+                              child: Icon(Icons.check_circle, size: 14, color: Colors.green),
+                            ),
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _pendingImages.removeAt(idx)),
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      SizedBox(
+                        width: 56,
+                        height: 28,
+                        child: Text(
+                          img.ocrText != null && img.ocrText!.isNotEmpty
+                              ? img.ocrText!.replaceAll('\n', ' ')
+                              : (img.ocrDone ? '无识别结果' : '识别中…'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: theme.colorScheme.outline,
                           ),
                         ),
                       ),
@@ -660,14 +962,15 @@ class _AiScreenState extends ConsumerState<AiScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // 图片选择按钮
+              // OCR 图片选择按钮
               SizedBox(
                 width: 36,
                 height: 36,
                 child: IconButton(
                   onPressed: _pickImage,
+                  tooltip: 'OCR 识别图片',
                   icon: Icon(
-                    Icons.image_outlined,
+                    Icons.document_scanner_outlined,
                     size: 20,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -769,7 +1072,7 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     );
   }
 
-  /// 选择图片
+  /// 选择图片并自动 OCR
   Future<void> _pickImage() async {
     final xFile = await _imagePicker.pickImage(
       source: ImageSource.gallery,
@@ -777,35 +1080,36 @@ class _AiScreenState extends ConsumerState<AiScreen> {
       maxHeight: 800,
       imageQuality: 70,
     );
-    if (xFile != null) {
-      setState(() => _pendingImages.add(xFile.path));
+    if (xFile == null) return;
+
+    _pendingImages.add(_PendingImageInfo(path: xFile.path));
+    setState(() {});
+
+    // 异步执行 OCR
+    try {
+      final ocrService = OcrService();
+      final ocrResult = await ocrService.recognizeImage(xFile.path);
+      final existingIdx = _pendingImages.indexWhere((p) => p.path == xFile.path);
+      if (existingIdx >= 0) {
+        setState(() {
+          _pendingImages[existingIdx] = _PendingImageInfo(
+            path: xFile.path,
+            ocrText: ocrResult,
+            ocrDone: true,
+          );
+        });
+      }
+    } catch (_) {
+      final existingIdx = _pendingImages.indexWhere((p) => p.path == xFile.path);
+      if (existingIdx >= 0) {
+        setState(() {
+          _pendingImages[existingIdx] = _PendingImageInfo(
+            path: xFile.path,
+            ocrDone: true,
+          );
+        });
+      }
     }
-  }
-
-  /// 压缩图片并返回 base64 字符串
-  Future<String> _compressAndEncode(String imagePath) async {
-    final file = File(imagePath);
-    final bytes = await file.readAsBytes();
-
-    final compressedBytes = await FlutterImageCompressPlatform.instance.compressWithList(
-      bytes,
-      quality: 70,
-      minWidth: 800,
-      minHeight: 800,
-    );
-
-    final mimeType = _getMimeType(imagePath);
-    return 'data:$mimeType;base64,${base64Encode(compressedBytes)}';
-  }
-
-  /// 根据文件扩展名获取 MIME 类型
-  String _getMimeType(String path) {
-    final ext = path.toLowerCase();
-    if (ext.endsWith('.png')) return 'image/png';
-    if (ext.endsWith('.webp')) return 'image/webp';
-    if (ext.endsWith('.gif')) return 'image/gif';
-    if (ext.endsWith('.bmp')) return 'image/bmp';
-    return 'image/jpeg';
   }
 
   // ==================== 操作方法 ====================
@@ -826,12 +1130,25 @@ class _AiScreenState extends ConsumerState<AiScreen> {
       });
     }
 
-    // 添加用户消息（含图片路径）
-    final imagePaths = List<String>.from(_pendingImages);
+    // 构建组合消息文本（用户文字 + OCR 识别结果）
+    final pendingInfos = List<_PendingImageInfo>.from(_pendingImages);
+    final imagePaths = pendingInfos.map((i) => i.path).toList();
+
+    final ocrParts = <String>[];
+    for (final img in pendingInfos) {
+      if (img.ocrText != null && img.ocrText!.isNotEmpty) {
+        ocrParts.add('[图片识别结果]\n${img.ocrText}');
+      }
+    }
+    final combinedText = [
+      if (text.isNotEmpty) text,
+      ...ocrParts,
+    ].join('\n\n');
+
     sessionService.addMessage(
       _currentSessionId,
       ChatMessageRole.user,
-      text,
+      combinedText,
       imagePaths: imagePaths,
     );
     _inputController.clear();
@@ -842,17 +1159,125 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     });
     _scrollToBottom();
 
-    // 模拟 AI 回复（原型演示）
-    await Future.delayed(Duration(milliseconds: 600 + DateTime.now().millisecond % 800));
-    const replies = [
-      '收到，这是一个模拟回复。正式版本将调用你配置的 API 进行真实对话。',
-      '好的，我理解了。当前为原型演示，未接入真实 AI 服务。',
-      '这是一个占位回复。你可以在 AI 设置中配置 OpenAI 兼容或 Claude 协议的 API Key。',
-      '（模拟）根据你的描述，建议关注优惠券叠加和满减活动。',
-    ];
-    final reply = replies[DateTime.now().millisecond % replies.length];
+    // 如果已配置 API Key 和 Base URL，调用真实接口
+    if (_settings.apiKey.isNotEmpty && _settings.baseUrl.isNotEmpty) {
+      try {
+        final agent = AiAgent.findById(_settings.agentId);
+        final systemPrompt = agent?.prompt ?? '你是一个 helpful 的助手。';
 
-    sessionService.addMessage(_currentSessionId, ChatMessageRole.assistant, reply);
+        final session = sessionService.getSession(_currentSessionId);
+        final messages = session?.messages ?? [];
+
+        final mcpEnabled = ref.read(mcpEnabledProvider);
+        final mcpRegistry = ref.read(mcpToolRegistryProvider);
+        final mcpToolConfigs = ref.read(mcpToolSettingsProvider);
+        final enabledToolIds = mcpToolConfigs
+            .where((c) => c.enabled)
+            .map((c) => c.toolId)
+            .toSet();
+        final mcpTools = <Map<String, dynamic>>[];
+        Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)? onMcpCall;
+
+        if (mcpEnabled) {
+          for (final tool in mcpRegistry.enabledTools) {
+            if (!enabledToolIds.contains(tool.name)) continue;
+            mcpTools.add({
+              'type': 'function',
+              'function': {
+                'name': tool.name,
+                'description': tool.description,
+                'parameters': tool.inputSchema,
+              },
+            });
+          }
+          if (mcpTools.isNotEmpty) {
+            onMcpCall = (name, args) async {
+              final tool = mcpRegistry.get(name);
+              if (tool == null) return {'error': '未知工具: $name'};
+              return tool.execute(args);
+            };
+          }
+        }
+
+        // 创建临时流式消息 ID
+        final streamingId = 'streaming_${DateTime.now().millisecondsSinceEpoch}';
+        final streamingMsg = _StreamingMessage(id: streamingId);
+        _streamingMessages[streamingId] = streamingMsg;
+
+        String? finalContent;
+        String? finalReasoning;
+
+        try {
+          final result = await AiApiService.sendMessage(
+            settings: _settings,
+            messages: messages,
+            systemPrompt: systemPrompt,
+            currentUserImages: const [],
+            mcpTools: mcpTools,
+            onMcpToolCall: onMcpCall,
+            streamCallbacks: StreamCallbacks(
+              onReasoning: (reasoning) {
+                setState(() {
+                  streamingMsg.reasoningContent = reasoning;
+                });
+                _scrollToBottom();
+              },
+              onContent: (content) {
+                setState(() {
+                  streamingMsg.content = content;
+                });
+                _scrollToBottom();
+              },
+              onDone: () {
+                setState(() {
+                  streamingMsg.isDone = true;
+                });
+              },
+              onError: (error) {
+                setState(() {
+                  streamingMsg.content = '错误：$error';
+                  streamingMsg.isDone = true;
+                });
+              },
+            ),
+          );
+
+          finalContent = result.content;
+          finalReasoning = result.reasoningContent;
+        } catch (e) {
+          finalContent = '发送失败：$e';
+        }
+
+        // 流式结束后保存到会话
+        setState(() {
+          _streamingMessages.remove(streamingId);
+        });
+
+        sessionService.addMessage(
+          _currentSessionId,
+          ChatMessageRole.assistant,
+          finalContent ?? streamingMsg.content,
+          reasoningContent: finalReasoning ?? streamingMsg.reasoningContent,
+        );
+      } catch (e) {
+        sessionService.addMessage(
+          _currentSessionId,
+          ChatMessageRole.assistant,
+          '发送失败：$e',
+        );
+      }
+    } else {
+      // 未配置 API，使用模拟回复
+      await Future.delayed(Duration(milliseconds: 600 + DateTime.now().millisecond % 800));
+      const replies = [
+        '收到，这是一个模拟回复。正式版本将调用你配置的 API 进行真实对话。',
+        '好的，我理解了。当前为原型演示，未接入真实 AI 服务。',
+        '这是一个占位回复。你可以在 AI 设置中配置 OpenAI 兼容或 Claude 协议的 API Key。',
+        '（模拟）根据你的描述，建议关注优惠券叠加和满减活动。',
+      ];
+      final reply = replies[DateTime.now().millisecond % replies.length];
+      sessionService.addMessage(_currentSessionId, ChatMessageRole.assistant, reply);
+    }
     setState(() {
       _sessions = sessionService.loadSessions();
       _sending = false;

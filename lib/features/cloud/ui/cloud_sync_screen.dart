@@ -1,17 +1,14 @@
-// 云同步页面
-//
-// 提供优惠数据的云同步配置和管理功能，包括：
-// - 同步方式选择（WebDAV / 腾讯云 COS / 阿里云 OSS）
-// - WebDAV 配置（预设服务/地址/用户名/密码/路径）
-// - 自动同步开关
-// - 手动同步/全量上传/全量下载
-// WebDAV 密码等敏感信息明文保存至数据库 Secrets 表。
-// 注意：同步功能尚未实现，当前为 UI 占位。
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import '../../../core/utils/logger_util.dart';
+import '../../../core/sync/transports/sync_transport.dart';
+import '../../../core/sync/transports/webdav_transport.dart';
+import '../../../core/sync/transports/cos_transport.dart';
+import '../../../core/sync/transports/oss_transport.dart';
+import '../../../core/sync/sync_service.dart';
 import '../../../shared/theme/theme_provider.dart';
+import '../providers/cloud_sync_provider.dart';
 
 class CloudSyncScreen extends ConsumerStatefulWidget {
   const CloudSyncScreen({super.key});
@@ -24,43 +21,36 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   String _syncProvider = 'webdav';
   bool _autoSync = false;
   bool _enabled = false;
+  bool _syncing = false;
   String _lastSyncAt = '从未同步';
+  bool _webdavPasswordVisible = false;
+  bool _cosSecretKeyVisible = false;
+  bool _ossAccessKeySecretVisible = false;
 
-  // WebDAV settings
+  // WebDAV
   final _webdavUrlController = TextEditingController();
   final _webdavUsernameController = TextEditingController();
   final _webdavPasswordController = TextEditingController();
   final _webdavPathController = TextEditingController(text: '/zheduoduo/');
   String _webdavPreset = 'custom';
 
+  // COS
+  final _cosSecretIdController = TextEditingController();
+  final _cosSecretKeyController = TextEditingController();
+  final _cosBucketController = TextEditingController();
+  final _cosRegionController = TextEditingController(text: 'ap-guangzhou');
+  final _cosAppIdController = TextEditingController();
+
+  // OSS
+  final _ossAccessKeyIdController = TextEditingController();
+  final _ossAccessKeySecretController = TextEditingController();
+  final _ossBucketController = TextEditingController();
+  final _ossRegionController = TextEditingController(text: 'oss-cn-hangzhou');
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final settingsDao = ref.read(settingsDaoProvider);
-    final secretsDao = ref.read(secretsDaoProvider);
-
-    // 从 AppSettings 加载非敏感配置
-    final lastSync = await settingsDao.getValue('cloud.webdav.lastSyncAt');
-    if (lastSync != null) {
-      setState(() => _lastSyncAt = lastSync);
-    }
-
-    // 从 Secrets 表加载 WebDAV 敏感凭证
-    final url = await secretsDao.getValue('webdav', 'url') ?? '';
-    final username = await secretsDao.getValue('webdav', 'username') ?? '';
-    final password = await secretsDao.getValue('webdav', 'password') ?? '';
-    final path = await secretsDao.getValue('webdav', 'path') ?? '/zheduoduo/';
-
-    setState(() {
-      _webdavUrlController.text = url;
-      _webdavUsernameController.text = username;
-      _webdavPasswordController.text = password;
-      _webdavPathController.text = path;
-    });
   }
 
   @override
@@ -69,7 +59,52 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     _webdavUsernameController.dispose();
     _webdavPasswordController.dispose();
     _webdavPathController.dispose();
+    _cosSecretIdController.dispose();
+    _cosSecretKeyController.dispose();
+    _cosBucketController.dispose();
+    _cosRegionController.dispose();
+    _cosAppIdController.dispose();
+    _ossAccessKeyIdController.dispose();
+    _ossAccessKeySecretController.dispose();
+    _ossBucketController.dispose();
+    _ossRegionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    final settingsDao = ref.read(settingsDaoProvider);
+    final secretsDao = ref.read(secretsDaoProvider);
+
+    final lastSync = await settingsDao.getValue('cloud.lastSyncAt');
+    if (lastSync != null) setState(() => _lastSyncAt = lastSync);
+
+    final provider = await settingsDao.getValue('cloud.provider');
+    if (provider != null) setState(() => _syncProvider = provider);
+
+    final autoSync = await settingsDao.getValue('cloud.autoSync');
+    if (autoSync != null) setState(() => _autoSync = autoSync == 'true');
+
+    final enabled = await settingsDao.getValue('cloud.enabled');
+    if (enabled != null) setState(() => _enabled = enabled == 'true');
+
+    // WebDAV
+    _webdavUrlController.text = await secretsDao.getValue('webdav', 'url') ?? '';
+    _webdavUsernameController.text = await secretsDao.getValue('webdav', 'username') ?? '';
+    _webdavPasswordController.text = await secretsDao.getValue('webdav', 'password') ?? '';
+    _webdavPathController.text = await secretsDao.getValue('webdav', 'path') ?? '/zheduoduo/';
+
+    // COS
+    _cosSecretIdController.text = await secretsDao.getValue('cos', 'secretId') ?? '';
+    _cosSecretKeyController.text = await secretsDao.getValue('cos', 'secretKey') ?? '';
+    _cosBucketController.text = await secretsDao.getValue('cos', 'bucket') ?? '';
+    _cosRegionController.text = await secretsDao.getValue('cos', 'region') ?? 'ap-guangzhou';
+    _cosAppIdController.text = await secretsDao.getValue('cos', 'appId') ?? '';
+
+    // OSS
+    _ossAccessKeyIdController.text = await secretsDao.getValue('oss', 'accessKeyId') ?? '';
+    _ossAccessKeySecretController.text = await secretsDao.getValue('oss', 'accessKeySecret') ?? '';
+    _ossBucketController.text = await secretsDao.getValue('oss', 'bucket') ?? '';
+    _ossRegionController.text = await secretsDao.getValue('oss', 'region') ?? 'oss-cn-hangzhou';
   }
 
   @override
@@ -78,122 +113,88 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('云同步')),
-      body: ListView(
+      body: Stack(
         children: [
-          // Sync status card
-          Card(
-            margin: const EdgeInsets.all(16),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Icon(
-                    _enabled ? Icons.cloud_done : Icons.cloud_off,
-                    size: 48,
-                    color: _enabled
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.outline,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _enabled ? '云同步已启用' : '云同步未启用',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: _enabled
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '上次同步: $_lastSyncAt',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      FilledButton.tonal(
-                        onPressed: _enabled ? _manualSync : null,
-                        child: const Text('立即同步'),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton(
-                        onPressed: _showFullSyncDialog,
-                        child: const Text('全量操作'),
-                      ),
-                    ],
-                  ),
-                ],
+          ListView(
+            children: [
+              _buildStatusCard(theme),
+              _buildProviderSection(theme),
+              if (_syncProvider == 'webdav') _buildWebDavSection(theme),
+              if (_syncProvider == 'cos') _buildCosSection(theme),
+              if (_syncProvider == 'oss') _buildOssSection(theme),
+              const Divider(height: 32),
+              _buildAutoSyncSection(),
+              const SizedBox(height: 32),
+            ],
+          ),
+          if (_syncing) _buildLoadingOverlay(theme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(ThemeData theme) {
+    return Card(
+      margin: const EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Icon(
+              _enabled ? Icons.cloud_done : Icons.cloud_off,
+              size: 48,
+              color: _enabled ? theme.colorScheme.primary : theme.colorScheme.outline,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _enabled ? '云同步已启用' : '云同步未启用',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: _enabled ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
               ),
             ),
-          ),
-
-          // Provider selection
-          _buildSectionHeader(context, '同步方式'),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
+            const SizedBox(height: 4),
+            Text('上次同步: $_lastSyncAt',
+                style: TextStyle(fontSize: 13, color: theme.colorScheme.outline)),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildProviderTile(
-                  context,
-                  icon: Icons.folder_outlined,
-                  title: 'WebDAV',
-                  subtitle: '坚果云 / Nextcloud / 群晖 / 自定义',
-                  value: 'webdav',
+                FilledButton.tonal(
+                  onPressed: _enabled && !_syncing ? _manualSync : null,
+                  child: const Text('立即同步'),
                 ),
-                _buildProviderTile(
-                  context,
-                  icon: Icons.cloud_outlined,
-                  title: '腾讯云 COS',
-                  subtitle: '对象存储服务',
-                  value: 'cos',
-                ),
-                _buildProviderTile(
-                  context,
-                  icon: Icons.cloud_outlined,
-                  title: '阿里云 OSS',
-                  subtitle: '对象存储服务',
-                  value: 'oss',
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: _enabled && !_syncing ? _showFullSyncDialog : null,
+                  child: const Text('全量操作'),
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingOverlay(ThemeData theme) {
+    return Container(
+      color: Colors.black26,
+      child: Center(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                const Text('同步中...', style: TextStyle(fontSize: 16)),
+              ],
+            ),
           ),
-
-          if (_syncProvider == 'webdav') _buildWebDavSettings(context),
-
-          const Divider(height: 32),
-
-          // Auto sync toggle
-          _buildSectionHeader(context, '自动同步'),
-          SwitchListTile(
-            secondary: const Icon(Icons.sync),
-            title: const Text('自动同步'),
-            subtitle: const Text('保存后自动推送，打开时自动拉取'),
-            value: _autoSync,
-            onChanged: (v) {
-              setState(() => _autoSync = v);
-              _saveSetting('cloud.webdav.autoSync', v.toString());
-            },
-          ),
-
-          SwitchListTile(
-            secondary: const Icon(Icons.cloud_outlined),
-            title: const Text('启用云同步'),
-            subtitle: const Text('开启后连接到云服务'),
-            value: _enabled,
-            onChanged: (v) {
-              setState(() => _enabled = v);
-              _saveSetting('cloud.webdav.enabled', v.toString());
-            },
-          ),
-
-          const SizedBox(height: 32),
-        ],
+        ),
       ),
     );
   }
@@ -212,13 +213,26 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     );
   }
 
-  Widget _buildProviderTile(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String value,
-  }) {
+  Widget _buildProviderSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(context, '同步方式'),
+        Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              _buildProviderTile('webdav', Icons.folder_outlined, 'WebDAV', '坚果云 / Nextcloud / 群晖 / 自定义'),
+              _buildProviderTile('cos', Icons.cloud_outlined, '腾讯云 COS', '对象存储服务'),
+              _buildProviderTile('oss', Icons.cloud_outlined, '阿里云 OSS', '对象存储服务'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProviderTile(String value, IconData icon, String title, String subtitle) {
     return RadioListTile<String>(
       secondary: Icon(icon),
       title: Text(title),
@@ -227,25 +241,21 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
       groupValue: _syncProvider,
       onChanged: (v) {
         setState(() => _syncProvider = v!);
+        _saveSetting('cloud.provider', v!);
       },
     );
   }
 
-  Widget _buildWebDavSettings(BuildContext context) {
+  Widget _buildWebDavSection(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(context, 'WebDAV 配置'),
-
-        // Preset selector
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: DropdownButtonFormField<String>(
             value: _webdavPreset,
-            decoration: const InputDecoration(
-              labelText: '预设服务',
-              border: OutlineInputBorder(),
-            ),
+            decoration: const InputDecoration(labelText: '预设服务', border: OutlineInputBorder()),
             items: const [
               DropdownMenuItem(value: 'custom', child: Text('自定义')),
               DropdownMenuItem(value: 'jianguoyun', child: Text('坚果云')),
@@ -256,73 +266,25 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
             onChanged: (v) {
               setState(() {
                 _webdavPreset = v!;
-                _applyPreset(v);
+                _applyWebdavPreset(v);
               });
+              _saveCredentials();
             },
           ),
         ),
         const SizedBox(height: 12),
-
-        // URL
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextFormField(
-            controller: _webdavUrlController,
-            decoration: const InputDecoration(
-              labelText: 'WebDAV 地址',
-              hintText: 'https://dav.example.com/',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
+        _buildTextField(_webdavUrlController, 'WebDAV 地址', 'https://dav.example.com/'),
         const SizedBox(height: 12),
-
-        // Username
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextFormField(
-            controller: _webdavUsernameController,
-            decoration: const InputDecoration(
-              labelText: '用户名',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
+        _buildTextField(_webdavUsernameController, '用户名'),
         const SizedBox(height: 12),
-
-        // Password
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextFormField(
-            controller: _webdavPasswordController,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: '密码',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
+        _buildTextField(_webdavPasswordController, '密码', null, true, _webdavPasswordVisible, () => setState(() => _webdavPasswordVisible = !_webdavPasswordVisible)),
         const SizedBox(height: 12),
-
-        // Path
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextFormField(
-            controller: _webdavPathController,
-            decoration: const InputDecoration(
-              labelText: '远端路径',
-              hintText: '/zheduoduo/',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
+        _buildTextField(_webdavPathController, '远端路径', '/zheduoduo/'),
         const SizedBox(height: 16),
-
-        // Test connection
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: OutlinedButton.icon(
-            onPressed: _testConnection,
+            onPressed: !_syncing ? _testConnection : null,
             icon: const Icon(Icons.wifi_find),
             label: const Text('测试连接'),
           ),
@@ -332,7 +294,148 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     );
   }
 
-  void _applyPreset(String preset) {
+  Widget _buildCosSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(context, '腾讯云 COS 配置'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text('需要腾讯云 COS 的 API 密钥（SecretId / SecretKey）和存储桶信息。',
+              style: TextStyle(fontSize: 13, color: theme.colorScheme.outline)),
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(_cosSecretIdController, 'SecretId'),
+        const SizedBox(height: 12),
+        _buildTextField(_cosSecretKeyController, 'SecretKey', null, true, _cosSecretKeyVisible, () => setState(() => _cosSecretKeyVisible = !_cosSecretKeyVisible)),
+        const SizedBox(height: 12),
+        _buildTextField(_cosBucketController, '存储桶名称'),
+        const SizedBox(height: 12),
+        _buildTextField(_cosRegionController, '区域', 'ap-guangzhou'),
+        const SizedBox(height: 12),
+        _buildTextField(_cosAppIdController, 'APPID（可选）'),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: OutlinedButton.icon(
+            onPressed: !_syncing ? _testConnection : null,
+            icon: const Icon(Icons.wifi_find),
+            label: const Text('测试连接'),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildOssSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(context, '阿里云 OSS 配置'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text('需要阿里云 OSS 的 AccessKey 和存储桶信息。',
+              style: TextStyle(fontSize: 13, color: theme.colorScheme.outline)),
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(_ossAccessKeyIdController, 'AccessKey ID'),
+        const SizedBox(height: 12),
+        _buildTextField(_ossAccessKeySecretController, 'AccessKey Secret', null, true, _ossAccessKeySecretVisible, () => setState(() => _ossAccessKeySecretVisible = !_ossAccessKeySecretVisible)),
+        const SizedBox(height: 12),
+        _buildTextField(_ossBucketController, 'Bucket 名称'),
+        const SizedBox(height: 12),
+        _buildTextField(_ossRegionController, 'Region', 'oss-cn-hangzhou'),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: OutlinedButton.icon(
+            onPressed: !_syncing ? _testConnection : null,
+            icon: const Icon(Icons.wifi_find),
+            label: const Text('测试连接'),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label,
+      [String? hint, bool obscureText = false, bool showPassword = false, VoidCallback? onTogglePassword]) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: TextFormField(
+        controller: controller,
+        obscureText: obscureText && !showPassword,
+        enableInteractiveSelection: true,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: const OutlineInputBorder(),
+          suffixIcon: obscureText
+              ? Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    icon: const Icon(Icons.content_paste, size: 20),
+                    tooltip: '粘贴',
+                    onPressed: () async {
+                      final data = await Clipboard.getData(Clipboard.kTextPlain);
+                      if (data?.text != null) {
+                        final text = controller.text;
+                        final sel = controller.selection;
+                        final newText = text.replaceRange(
+                          sel.isValid ? sel.start : text.length,
+                          sel.isValid ? sel.end : text.length,
+                          data!.text!,
+                        );
+                        controller.text = newText;
+                        controller.selection = TextSelection.collapsed(
+                          offset: sel.isValid ? sel.start + data.text!.length : newText.length,
+                        );
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(showPassword ? Icons.visibility : Icons.visibility_off, size: 20),
+                    tooltip: showPassword ? '隐藏' : '显示',
+                    onPressed: onTogglePassword,
+                  ),
+                ])
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAutoSyncSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(context, '自动同步'),
+        SwitchListTile(
+          secondary: const Icon(Icons.sync),
+          title: const Text('自动同步'),
+          subtitle: const Text('保存后自动推送，打开时自动拉取'),
+          value: _autoSync,
+          onChanged: (v) {
+            setState(() => _autoSync = v);
+            _saveSetting('cloud.autoSync', v.toString());
+          },
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.cloud_outlined),
+          title: const Text('启用云同步'),
+          subtitle: const Text('开启后连接到云服务'),
+          value: _enabled,
+          onChanged: (v) {
+            setState(() => _enabled = v);
+            _saveSetting('cloud.enabled', v.toString());
+          },
+        ),
+      ],
+    );
+  }
+
+  void _applyWebdavPreset(String preset) {
     switch (preset) {
       case 'jianguoyun':
         _webdavUrlController.text = 'https://dav.jianguoyun.com/dav/';
@@ -351,11 +454,77 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     }
   }
 
-  void _manualSync() {
-    // TODO: Implement sync
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('同步功能即将上线')),
-    );
+  SyncTransport? _createTransport() {
+    switch (_syncProvider) {
+      case 'webdav':
+        final url = _webdavUrlController.text.trim();
+        final username = _webdavUsernameController.text.trim();
+        final password = _webdavPasswordController.text.trim();
+        if (url.isEmpty || username.isEmpty || password.isEmpty) {
+          _showSnackBar('请填写完整的 WebDAV 配置');
+          return null;
+        }
+        return WebDavTransport(baseUrl: url, username: username, password: password);
+
+      case 'cos':
+        final secretId = _cosSecretIdController.text.trim();
+        final secretKey = _cosSecretKeyController.text.trim();
+        final bucket = _cosBucketController.text.trim();
+        final region = _cosRegionController.text.trim();
+        if (secretId.isEmpty || secretKey.isEmpty || bucket.isEmpty || region.isEmpty) {
+          _showSnackBar('请填写完整的 COS 配置');
+          return null;
+        }
+        return CosTransport(
+          bucket: bucket,
+          region: region,
+          secretId: secretId,
+          secretKey: secretKey,
+          appId: _cosAppIdController.text.trim(),
+        );
+
+      case 'oss':
+        final accessKeyId = _ossAccessKeyIdController.text.trim();
+        final accessKeySecret = _ossAccessKeySecretController.text.trim();
+        final bucket = _ossBucketController.text.trim();
+        final region = _ossRegionController.text.trim();
+        if (accessKeyId.isEmpty || accessKeySecret.isEmpty || bucket.isEmpty || region.isEmpty) {
+          _showSnackBar('请填写完整的 OSS 配置');
+          return null;
+        }
+        return OssTransport(
+          bucket: bucket,
+          region: region,
+          accessKeyId: accessKeyId,
+          accessKeySecret: accessKeySecret,
+        );
+
+      default:
+        _showSnackBar('不支持的同步方式');
+        return null;
+    }
+  }
+
+  Future<void> _manualSync() async {
+    final transport = _createTransport();
+    if (transport == null) return;
+
+    _saveCredentials();
+    setState(() => _syncing = true);
+
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      final result = await syncService.smartSync(transport);
+      setState(() {
+        _syncing = false;
+        _lastSyncAt = DateTime.now().toIso8601String();
+      });
+      _saveSetting('cloud.lastSyncAt', _lastSyncAt);
+      _showResultDialog(result);
+    } catch (e) {
+      setState(() => _syncing = false);
+      _showSnackBar('同步出错: $e');
+    }
   }
 
   void _showFullSyncDialog() {
@@ -388,39 +557,124 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     );
   }
 
-  void _fullPush() {
-    // TODO: Implement full push
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('全量上传功能即将上线')),
+  Future<void> _fullPush() async {
+    final transport = _createTransport();
+    if (transport == null) return;
+
+    _saveCredentials();
+    setState(() => _syncing = true);
+
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      final result = await syncService.fullUpload(transport);
+      setState(() {
+        _syncing = false;
+        _lastSyncAt = DateTime.now().toIso8601String();
+      });
+      _saveSetting('cloud.lastSyncAt', _lastSyncAt);
+      _showResultDialog(result);
+    } catch (e) {
+      setState(() => _syncing = false);
+      _showSnackBar('上传失败: $e');
+    }
+  }
+
+  Future<void> _fullDownload() async {
+    final transport = _createTransport();
+    if (transport == null) return;
+
+    _saveCredentials();
+    setState(() => _syncing = true);
+
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      final result = await syncService.fullDownload(transport);
+      setState(() {
+        _syncing = false;
+        _lastSyncAt = DateTime.now().toIso8601String();
+      });
+      _saveSetting('cloud.lastSyncAt', _lastSyncAt);
+      _showResultDialog(result);
+    } catch (e) {
+      setState(() => _syncing = false);
+      _showSnackBar('下载失败: $e');
+    }
+  }
+
+  Future<void> _testConnection() async {
+    final transport = _createTransport();
+    if (transport == null) return;
+
+    _saveCredentials();
+    setState(() => _syncing = true);
+
+    final providerLabel = switch (_syncProvider) {
+      'webdav' => 'WebDAV',
+      'cos' => 'COS',
+      'oss' => 'OSS',
+      _ => _syncProvider,
+    };
+
+    try {
+      AppLogger.instance.i('[$providerLabel] 开始测试连接...');
+      final ok = await transport.testConnection();
+      setState(() => _syncing = false);
+      if (ok) {
+        AppLogger.instance.i('[$providerLabel] 连接成功');
+        _showSnackBar('连接成功', isError: false);
+      } else {
+        AppLogger.instance.e('[$providerLabel] 连接失败');
+        _showSnackBar('连接失败，请检查配置和网络');
+      }
+    } catch (e) {
+      setState(() => _syncing = false);
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      AppLogger.instance.e('[$providerLabel] 测试连接异常: $msg');
+      _showSnackBar(msg);
+    }
+  }
+
+  void _showResultDialog(SyncResult result) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(result.success ? '完成' : '失败'),
+        content: Text(result.message ?? ''),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('确定')),
+        ],
+      ),
     );
   }
 
-  void _fullDownload() {
-    // TODO: Implement full download
+  void _showSnackBar(String message, {bool isError = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('全量下载功能即将上线')),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
     );
   }
 
-  void _testConnection() {
-    // TODO: Implement connection test
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('连接测试功能即将上线')),
-    );
+  void _saveCredentials() {
+    final secretsDao = ref.read(secretsDaoProvider);
+    secretsDao.setValue('webdav', 'url', _webdavUrlController.text);
+    secretsDao.setValue('webdav', 'username', _webdavUsernameController.text);
+    secretsDao.setValue('webdav', 'password', _webdavPasswordController.text);
+    secretsDao.setValue('webdav', 'path', _webdavPathController.text);
+    secretsDao.setValue('cos', 'secretId', _cosSecretIdController.text);
+    secretsDao.setValue('cos', 'secretKey', _cosSecretKeyController.text);
+    secretsDao.setValue('cos', 'bucket', _cosBucketController.text);
+    secretsDao.setValue('cos', 'region', _cosRegionController.text);
+    secretsDao.setValue('cos', 'appId', _cosAppIdController.text);
+    secretsDao.setValue('oss', 'accessKeyId', _ossAccessKeyIdController.text);
+    secretsDao.setValue('oss', 'accessKeySecret', _ossAccessKeySecretController.text);
+    secretsDao.setValue('oss', 'bucket', _ossBucketController.text);
+    secretsDao.setValue('oss', 'region', _ossRegionController.text);
   }
 
-  /// 保存非敏感设置到 AppSettings 表
   Future<void> _saveSetting(String key, String value) async {
     final settingsDao = ref.read(settingsDaoProvider);
     await settingsDao.setValue(key, value);
-  }
-
-  /// 保存 WebDAV 凭证到 Secrets 表
-  Future<void> _saveWebdavCredentials() async {
-    final secretsDao = ref.read(secretsDaoProvider);
-    await secretsDao.setValue('webdav', 'url', _webdavUrlController.text);
-    await secretsDao.setValue('webdav', 'username', _webdavUsernameController.text);
-    await secretsDao.setValue('webdav', 'password', _webdavPasswordController.text);
-    await secretsDao.setValue('webdav', 'path', _webdavPathController.text);
   }
 }

@@ -17,6 +17,7 @@ class DealImages extends Table {
   IntColumn get compressedSize => integer().nullable()();
   TextColumn get sourceUrl => text().nullable()();
   DateTimeColumn get updatedAt => dateTime()();
+  IntColumn get deleted => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {dealId};

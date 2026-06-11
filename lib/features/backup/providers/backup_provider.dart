@@ -66,9 +66,11 @@ final backupStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   final service = ref.watch(backupServiceProvider);
   final dbSize = await service.getDatabaseSize();
   final imgSize = await service.getImagesSize();
+  final imgCount = await service.getImagesCount();
   return {
     'dbSize': dbSize,
     'imgSize': imgSize,
+    'imgCount': imgCount,
     'totalSize': dbSize + imgSize,
   };
 });

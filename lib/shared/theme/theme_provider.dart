@@ -2,7 +2,7 @@
 //
 // 提供 Riverpod Provider 用于：
 // - AppDatabase 单例管理（databaseProvider）
-// - SettingsDao / AiConfigDao / SecretsDao 实例的依赖注入
+// - SettingsDao / AiConfigDao / SecretsDao / ImageCompressSettingsDao 实例的依赖注入
 // - 主题模式状态管理（themeModeProvider / ThemeModeNotifier）
 
 import 'package:flutter/material.dart';
@@ -11,7 +11,9 @@ import '../../core/database/app_database.dart';
 import '../../core/database/daos/settings_dao.dart';
 import '../../core/database/daos/ai_config_dao.dart';
 import '../../core/database/daos/secrets_dao.dart';
+import '../../core/database/daos/image_compress_settings_dao.dart';
 
+/// 设置 DAO Provider
 final settingsDaoProvider = Provider<SettingsDao>((ref) {
   final db = ref.watch(databaseProvider);
   return SettingsDao(db);
@@ -29,12 +31,20 @@ final secretsDaoProvider = Provider<SecretsDao>((ref) {
   return SecretsDao(db);
 });
 
+/// 图片压缩配置 DAO Provider
+final imageCompressSettingsDaoProvider = Provider<ImageCompressSettingsDao>((ref) {
+  final db = ref.watch(databaseProvider);
+  return ImageCompressSettingsDao(db);
+});
+
+/// 数据库实例 Provider（单例，自动关闭）
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
   ref.onDispose(() => db.close());
   return db;
 });
 
+/// 主题模式 Provider
 final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((ref) {
   final settingsDao = ref.watch(settingsDaoProvider);
   return ThemeModeNotifier(settingsDao);
@@ -51,6 +61,7 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
     _loadTheme();
   }
 
+  /// 从数据库加载主题偏好
   Future<void> _loadTheme() async {
     final theme = await _settingsDao.getValue('theme');
     switch (theme) {
@@ -65,6 +76,7 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
     }
   }
 
+  /// 设置主题模式并持久化
   Future<void> setThemeMode(ThemeMode mode) async {
     state = mode;
     String value;

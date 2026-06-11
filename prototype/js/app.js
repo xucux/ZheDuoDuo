@@ -467,6 +467,145 @@ createApp({
       ]},
     ];
 
+    // MCP 内置工具配置
+    const mcpTools = ref([
+      { toolId: 'ocr_recognize', name: 'OCR 文字识别', functionName: 'ocr_recognize', description: '识别图片中的文字内容（Google ML Kit）', enabled: true },
+      { toolId: 'screenshot_parser_add_deal', name: '商品截图解析', functionName: 'screenshot_parser_add_deal', description: '解析商品截图信息并新增折扣记录', enabled: true },
+      { toolId: 'deals_query', name: '折扣信息查询', functionName: 'deals_query', description: '查询折扣信息列表，支持平台、分类、关键词模糊搜索、价格范围、时间范围筛选和排序', enabled: true },
+      { toolId: 'deals_aggregate', name: '折扣信息聚合统计', functionName: 'deals_aggregate', description: '聚合统计折扣信息，支持计数、求和、平均值、最小值、最大值等汇总方式', enabled: true },
+      { toolId: 'deals_group', name: '折扣信息分组查询', functionName: 'deals_group', description: '分组查询折扣信息列表，支持按平台、分类、月份、年份分组统计', enabled: true },
+    ]);
+
+    function toggleMcpTool(toolId, enabled) {
+      const t = mcpTools.value.find(x => x.toolId === toolId);
+      if (t) t.enabled = enabled;
+    }
+
+    // 提示词数据
+    const defaultPrompts = [
+      { id: 1, name: '商品图片解析', content: '你是一个专业的电商图片解析引擎。分析输入图片中的所有商品信息，并严格按照指定 YAML 格式输出。', category: 'system' },
+      { id: 2, name: '购物比价助手', content: '你是购物比价专家，擅长分析商品优惠、优惠券叠加、历史价格走势。', category: 'system' },
+      { id: 3, name: '文案优化', content: '你是电商文案优化专家，擅长将促销文案改写得更吸引人。', category: 'system' },
+    ];
+    const prompts = ref([...defaultPrompts]);
+    const promptEdit = ref(null);
+    const promptForm = reactive({ name: '', content: '' });
+
+    function addPrompt() {
+      promptEdit.value = null;
+      promptForm.name = '';
+      promptForm.content = '';
+    }
+
+    function editPrompt(p) {
+      promptEdit.value = p;
+      promptForm.name = p.name;
+      promptForm.content = p.content;
+    }
+
+    function savePrompt() {
+      const name = promptForm.name.trim();
+      const content = promptForm.content.trim();
+      if (!name || !content) return;
+      if (promptEdit.value) {
+        promptEdit.value.name = name;
+        promptEdit.value.content = content;
+      } else {
+        prompts.value.push({ id: Date.now(), name, content, category: 'custom' });
+      }
+      promptEdit.value = null;
+      showToast('提示词已保存');
+    }
+
+    function deletePrompt(p) {
+      prompts.value = prompts.value.filter(x => x.id !== p.id);
+      showToast('已删除');
+    }
+
+    function copyPromptContent(p) {
+      navigator.clipboard?.writeText(p.content).then(() => showToast('已复制')).catch(() => showToast('复制失败'));
+    }
+
+    // AI 服务商管理
+    const aiProviders = ref([
+      { id: 'p1', name: 'DeepSeek', protocol: 'openai', baseUrl: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat', agentId: 'default', temperature: 0.7, maxTokens: 2048, isActive: true },
+    ]);
+    const aiProviderEdit = ref(null);
+    const aiProviderForm = reactive({ name: '', protocol: 'openai', baseUrl: '', apiKey: '', model: '', agentId: 'default', temperature: 0.7, maxTokens: 2048 });
+    const aiModelList = ref([]);
+    const aiModelListLoading = ref(false);
+
+    function addAiProvider() {
+      aiProviderEdit.value = null;
+      Object.assign(aiProviderForm, { name: '', protocol: 'openai', baseUrl: '', apiKey: '', model: '', agentId: 'default', temperature: 0.7, maxTokens: 2048 });
+    }
+
+    function editAiProvider(p) {
+      aiProviderEdit.value = p;
+      Object.assign(aiProviderForm, { ...p });
+    }
+
+    function saveAiProvider() {
+      const name = aiProviderForm.name.trim();
+      if (!name) return;
+      if (aiProviderEdit.value) {
+        Object.assign(aiProviderEdit.value, { ...aiProviderForm });
+      } else {
+        aiProviders.value.push({ id: 'p_' + Date.now(), ...aiProviderForm, isActive: false });
+      }
+      aiProviderEdit.value = null;
+      showToast('服务商已保存');
+    }
+
+    function deleteAiProvider(p) {
+      aiProviders.value = aiProviders.value.filter(x => x.id !== p.id);
+      showToast('已删除');
+    }
+
+    function setActiveProvider(p) {
+      aiProviders.value.forEach(x => x.isActive = false);
+      p.isActive = true;
+      // 同步到 aiChat 设置
+      Object.assign(settings.aiChat, {
+        providerPreset: 'custom',
+        protocol: p.protocol,
+        apiKey: p.apiKey,
+        baseUrl: p.baseUrl,
+        model: p.model,
+        agentId: p.agentId,
+        temperature: p.temperature,
+        maxTokens: p.maxTokens,
+      });
+      saveSettings();
+      showToast(`已切换至 ${p.name}`);
+    }
+
+    async function fetchAiModels() {
+      const baseUrl = aiProviderForm.baseUrl;
+      const apiKey = aiProviderForm.apiKey;
+      if (!baseUrl || !apiKey) {
+        showToast('请先填写 Base URL 和 API Key');
+        return;
+      }
+      aiModelListLoading.value = true;
+      aiModelList.value = [];
+      // 模拟延迟
+      await new Promise(r => setTimeout(r, 800));
+      // 模拟模型列表
+      aiModelList.value = [
+        'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo',
+        'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229',
+        'deepseek-chat', 'deepseek-coder',
+        'Qwen/Qwen2.5-72B-Instruct', 'Qwen/Qwen2.5-7B-Instruct',
+      ];
+      aiModelListLoading.value = false;
+    }
+
+    function selectAiModel(model) {
+      aiProviderForm.model = model;
+      aiModelList.value = [];
+    }
+
     const backupHistory = [
       { name: 'zheduoduo_backup_20260607.zip', date: '2026-06-07 09:30', size: '128 KB' },
       { name: 'zheduoduo_backup_20260601.zip', date: '2026-06-01 18:00', size: '96 KB' },
@@ -850,6 +989,7 @@ createApp({
     const screenLabels = {
       list: '清单首页', search: '搜索', detail: '优惠详情', form: '新建/编辑',
       backup: '本地备份', 'cloud-sync': '云同步', 'cloud-webdav': 'WebDAV', 'cloud-cos': '腾讯云COS', 'cloud-oss': '阿里云OSS', settings: '系统设置',
+      'ai-settings': 'AI 设置', 'mcp-management': 'MCP 工具管理', 'prompts': '提示词管理',
     };
     const screenLabel = computed(() => {
       if (currentScreen.value !== 'list') return screenLabels[currentScreen.value] || currentScreen.value;
@@ -1153,6 +1293,14 @@ createApp({
       ensureChatSession, selectChatSession, startNewChat, removeChatSession, sendChatMessage,
       saveAiChatSettings, exportChatBackup, importChatBackup, handleChatImport,
       applyProviderPreset,
+      // MCP 工具
+      mcpTools, toggleMcpTool,
+      // 提示词
+      prompts, promptEdit, promptForm, addPrompt, editPrompt, savePrompt, deletePrompt, copyPromptContent,
+      // AI 服务商
+      aiProviders, aiProviderEdit, aiProviderForm, aiModelList, aiModelListLoading,
+      addAiProvider, editAiProvider, saveAiProvider, deleteAiProvider, setActiveProvider,
+      fetchAiModels, selectAiModel,
     };
   },
 }).mount('#app');

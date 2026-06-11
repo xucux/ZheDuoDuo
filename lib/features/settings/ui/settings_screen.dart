@@ -6,11 +6,14 @@
 // - 默认排序方式
 // - 货币符号
 // - 筛选时间范围
+// - 图片压缩配置（按文件大小分档设置压缩质量）
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/database/app_database.dart';
+import '../../../core/utils/image_compress.dart';
 import '../../../shared/theme/theme_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -25,6 +28,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _currency = '¥';
   String _listDisplayMode = 'normal';
   String _filterTimeRange = '3m';
+  List<ImageCompressSetting> _compressSettings = [];
 
   @override
   void initState() {
@@ -34,16 +38,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final settingsDao = ref.read(settingsDaoProvider);
+    final compressDao = ref.read(imageCompressSettingsDaoProvider);
     final sort = await settingsDao.getValue('defaultSort');
     final curr = await settingsDao.getValue('currency');
     final display = await settingsDao.getValue('listDisplayMode');
     final timeRange = await settingsDao.getValue('filterTimeRange');
+    final compressList = await compressDao.getAllSettings();
 
     setState(() {
       _defaultSort = sort ?? 'date-desc';
       _currency = curr ?? '¥';
       _listDisplayMode = display ?? 'normal';
       _filterTimeRange = timeRange ?? '3m';
+      _compressSettings = compressList;
     });
   }
 
@@ -94,6 +101,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const Divider(height: 24),
 
+          // Image compression section
+          _buildSectionHeader(context, '图片压缩'),
+          _buildListTile(
+            context,
+            icon: Icons.compress_outlined,
+            title: '压缩配置',
+            subtitle: _getCompressSummary(),
+            onTap: () => _showCompressSettings(context),
+          ),
+
+          const Divider(height: 24),
+
           // About
           _buildSectionHeader(context, '关于'),
           _buildListTile(
@@ -107,6 +126,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  /// 生成压缩配置摘要文本
+  String _getCompressSummary() {
+    if (_compressSettings.isEmpty) return '未配置';
+    return _compressSettings.map((s) => '${s.label}: ${s.quality}%').join(' / ');
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
@@ -159,6 +184,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),
+      visualDensity: VisualDensity.compact,
+      minLeadingWidth: 40,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );
   }
 
@@ -175,6 +203,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
+      visualDensity: VisualDensity.compact,
+      minLeadingWidth: 40,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );
   }
 
@@ -210,6 +241,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       default:
         return range;
     }
+  }
+
+  /// 显示图片压缩配置面板
+  void _showCompressSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _CompressSettingsSheet(
+        settings: _compressSettings,
+        onSave: () async {
+          await _loadSettings();
+          if (ctx.mounted) Navigator.pop(ctx);
+        },
+      ),
+    );
   }
 
   void _showDisplayModePicker(BuildContext context) {
@@ -345,5 +391,232 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _saveSetting(String key, String value) async {
     final settingsDao = ref.read(settingsDaoProvider);
     await settingsDao.setValue(key, value);
+  }
+}
+
+/// 图片压缩配置面板
+///
+/// 展示各文件大小档位的压缩质量和最大宽度配置，
+/// 支持通过 Slider 调整质量，以及重置为默认值。
+class _CompressSettingsSheet extends ConsumerStatefulWidget {
+  final List<ImageCompressSetting> settings;
+  final VoidCallback onSave;
+
+  const _CompressSettingsSheet({
+    required this.settings,
+    required this.onSave,
+  });
+
+  @override
+  ConsumerState<_CompressSettingsSheet> createState() =>
+      _CompressSettingsSheetState();
+}
+
+class _CompressSettingsSheetState extends ConsumerState<_CompressSettingsSheet> {
+  late List<ImageCompressSetting> _settings;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = List.from(widget.settings);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 标题栏
+          Row(
+            children: [
+              Text('图片压缩配置',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600)),
+              const Spacer(),
+              TextButton(
+                onPressed: _resetToDefaults,
+                child: const Text('恢复默认'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '按原始文件大小分档设置压缩质量，数值越低压缩率越高、文件越小',
+            style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+
+          // 各档位配置
+          ..._settings.map((setting) => _buildSettingItem(context, setting)),
+
+          const SizedBox(height: 16),
+
+          // 说明
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 6),
+                    Text('说明', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '质量 100 = 无损压缩，质量 1 = 最高压缩率\n'
+                  '最大宽度控制图片分辨率，超出会等比缩放\n'
+                  '压缩格式统一为 JPEG',
+                  style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant, height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingItem(BuildContext context, ImageCompressSetting setting) {
+    final theme = Theme.of(context);
+    final sizeLabel = ImageUtils.formatFileSize(setting.minSize);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 档位标题
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  setting.label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '≥ $sizeLabel',
+                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // 压缩质量 Slider
+          Row(
+            children: [
+              Text('质量', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+              Expanded(
+                child: Slider(
+                  value: setting.quality.toDouble(),
+                  min: 10,
+                  max: 100,
+                  divisions: 9,
+                  label: '${setting.quality}%',
+                  onChanged: (value) {
+                    setState(() {
+                      final idx = _settings.indexWhere((s) => s.minSize == setting.minSize);
+                      if (idx >= 0) {
+                        _settings[idx] = ImageCompressSetting(
+                          minSize: setting.minSize,
+                          quality: value.toInt(),
+                          label: setting.label,
+                          maxWidth: setting.maxWidth,
+                        );
+                      }
+                    });
+                  },
+                  onChangeEnd: (value) async {
+                    final compressDao = ref.read(imageCompressSettingsDaoProvider);
+                    await compressDao.updateQuality(setting.minSize, value.toInt());
+                  },
+                ),
+              ),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  '${setting.quality}%',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
+          ),
+
+          // 最大宽度 Slider
+          Row(
+            children: [
+              Text('宽度', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+              Expanded(
+                child: Slider(
+                  value: setting.maxWidth.toDouble(),
+                  min: 400,
+                  max: 2400,
+                  divisions: 10,
+                  label: '${setting.maxWidth}px',
+                  onChanged: (value) {
+                    setState(() {
+                      final idx = _settings.indexWhere((s) => s.minSize == setting.minSize);
+                      if (idx >= 0) {
+                        _settings[idx] = ImageCompressSetting(
+                          minSize: setting.minSize,
+                          quality: setting.quality,
+                          label: setting.label,
+                          maxWidth: value.toInt(),
+                        );
+                      }
+                    });
+                  },
+                  onChangeEnd: (value) async {
+                    final compressDao = ref.read(imageCompressSettingsDaoProvider);
+                    await compressDao.updateMaxWidth(setting.minSize, value.toInt());
+                  },
+                ),
+              ),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  '${setting.maxWidth}px',
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 重置为默认压缩配置
+  Future<void> _resetToDefaults() async {
+    final compressDao = ref.read(imageCompressSettingsDaoProvider);
+    await compressDao.resetToDefaults();
+    final newSettings = await compressDao.getAllSettings();
+    setState(() => _settings = newSettings);
+    widget.onSave();
   }
 }

@@ -20,20 +20,39 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
   SecretsDao(super.db);
 
   /// 获取指定类别和键名的密钥值
-  Future<String?> getValue(String category, String keyName) async {
+  ///
+  /// [entityId] 可选，用于区分不同实体（如不同 AI 服务商）的同类型密钥。
+  Future<String?> getValue(String category, String keyName, {String? entityId}) async {
     final query = select(secrets)
-      ..where((t) => t.category.equals(category) & t.keyName.equals(keyName))
+      ..where((t) {
+        var condition = t.category.equals(category) & t.keyName.equals(keyName);
+        if (entityId != null) {
+          condition &= t.entityId.equals(entityId);
+        } else {
+          condition &= t.entityId.isNull();
+        }
+        return condition;
+      })
       ..limit(1);
     final result = await query.getSingleOrNull();
     return result?.keyValue;
   }
 
   /// 设置指定类别和键名的密钥值（upsert）
+  ///
+  /// [entityId] 可选，用于区分不同实体的同类型密钥。
   Future<void> setValue(String category, String keyName, String keyValue, {String? entityId, String? note}) async {
-    final existing = await getValue(category, keyName);
+    final existing = await getValue(category, keyName, entityId: entityId);
     if (existing != null) {
-      await (update(secrets)..where((t) => t.category.equals(category) & t.keyName.equals(keyName)))
-          .write(SecretsCompanion(
+      await (update(secrets)..where((t) {
+        var condition = t.category.equals(category) & t.keyName.equals(keyName);
+        if (entityId != null) {
+          condition &= t.entityId.equals(entityId);
+        } else {
+          condition &= t.entityId.isNull();
+        }
+        return condition;
+      })).write(SecretsCompanion(
             keyValue: Value(keyValue),
             updatedAt: Value(DateTime.now()),
             entityId: entityId != null ? Value(entityId) : const Value.absent(),
@@ -53,8 +72,18 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
   }
 
   /// 删除指定类别和键名的密钥
-  Future<void> deleteValue(String category, String keyName) async {
-    await (delete(secrets)..where((t) => t.category.equals(category) & t.keyName.equals(keyName))).go();
+  ///
+  /// [entityId] 可选，仅删除匹配该实体的密钥。
+  Future<void> deleteValue(String category, String keyName, {String? entityId}) async {
+    await (delete(secrets)..where((t) {
+      var condition = t.category.equals(category) & t.keyName.equals(keyName);
+      if (entityId != null) {
+        condition &= t.entityId.equals(entityId);
+      } else {
+        condition &= t.entityId.isNull();
+      }
+      return condition;
+    })).go();
   }
 
   /// 获取指定类别的所有密钥

@@ -15,7 +15,10 @@ import '../../features/ai/ui/ai_settings_screen.dart';
 import '../../features/deals/ui/deal_list_screen.dart';
 import '../../features/deals/ui/deal_detail_screen.dart';
 import '../../features/deals/ui/deal_form_screen.dart';
+import '../../features/mcp/ui/mcp_management_screen.dart';
+import '../../features/ocr/ui/ocr_test_screen.dart';
 import '../../features/search/ui/search_screen.dart';
+import '../../features/prompts/ui/prompts_screen.dart';
 import '../../features/settings/ui/settings_screen.dart';
 import '../../features/settings/ui/about_screen.dart';
 import '../../features/cloud/ui/cloud_sync_screen.dart';
@@ -111,6 +114,21 @@ final appRouter = GoRouter(
                   builder: (context, state) => const AiSettingsScreen(),
                 ),
                 GoRoute(
+                  path: 'mcp-management',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const McpManagementScreen(),
+                ),
+                GoRoute(
+                  path: 'prompts',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const PromptsScreen(),
+                ),
+                GoRoute(
+                  path: 'ocr-test',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) => const OcrTestScreen(),
+                ),
+                GoRoute(
                   path: 'about',
                   parentNavigatorKey: _rootNavigatorKey,
                   builder: (context, state) => const AboutScreen(),
@@ -136,7 +154,20 @@ class _ProfileScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('我的')),
       body: ListView(
         children: [
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          _buildSection(
+            context,
+            title: '工具',
+            children: [
+              _buildTile(
+                context,
+                icon: Icons.text_snippet_outlined,
+                title: 'OCR 识别测试',
+                subtitle: '测试图片文字识别功能 (Google ML Kit)',
+                onTap: () => context.push('/profile/ocr-test'),
+              ),
+            ],
+          ),
           _buildSection(
             context,
             title: '数据管理',
@@ -171,9 +202,16 @@ class _ProfileScreen extends StatelessWidget {
               _buildTile(
                 context,
                 icon: Icons.text_snippet_outlined,
-                title: '提示词前缀',
-                subtitle: '一键复制到 AI 聊天框',
-                onTap: () => context.push('/profile/ai-settings'),
+                title: '提示词',
+                subtitle: '管理提示词模板',
+                onTap: () => context.push('/profile/prompts'),
+              ),
+              _buildTile(
+                context,
+                icon: Icons.cable,
+                title: 'MCP 管理',
+                subtitle: '工具服务 / 各工具开关',
+                onTap: () => context.push('/profile/mcp-management'),
               ),
             ],
           ),
@@ -217,7 +255,7 @@ class _ProfileScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Text(
             title,
             style: TextStyle(
@@ -249,6 +287,9 @@ class _ProfileScreen extends StatelessWidget {
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
+      visualDensity: VisualDensity.compact,
+      minLeadingWidth: 40,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );
   }
 }

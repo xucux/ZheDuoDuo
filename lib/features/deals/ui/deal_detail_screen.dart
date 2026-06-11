@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/database/daos/deal_dao.dart';
+import '../../../core/utils/image_compress.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../providers/deals_provider.dart';
 
@@ -64,8 +66,8 @@ class DealDetailScreen extends ConsumerWidget {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          Image.asset(
-                            dw.image!.imagePath,
+                          Image.file(
+                            File(dw.image!.imagePath),
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => _buildPlaceholder(context),
                           ),
@@ -311,6 +313,35 @@ class DealDetailScreen extends ConsumerWidget {
                               ],
                             ),
                           ],
+                          if (deal.isLowestPrice == 1) ...[
+                            const Divider(height: 24),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE8F5E9),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.trending_down, size: 14, color: Color(0xFF2E7D32)),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        '历史最低价',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF2E7D32),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -420,6 +451,21 @@ class DealDetailScreen extends ConsumerWidget {
                             DateFormat('yyyy-MM-dd HH:mm').format(deal.updatedAt)),
                         if (deal.link != null)
                           _buildInfoRow(context, '链接', deal.link!, isLink: true),
+                        // 图片大小信息
+                        if (dw.image != null) ...[
+                          if (dw.image!.originalSize != null && dw.image!.compressedSize != null)
+                            _buildInfoRow(
+                              context,
+                              '图片大小',
+                              '${ImageUtils.formatFileSize(dw.image!.compressedSize!)}（原始 ${ImageUtils.formatFileSize(dw.image!.originalSize!)}，压缩 ${((dw.image!.compressedSize! / dw.image!.originalSize!) * 100).toStringAsFixed(0)}%）',
+                            )
+                          else if (dw.image!.compressedSize != null)
+                            _buildInfoRow(
+                              context,
+                              '图片大小',
+                              ImageUtils.formatFileSize(dw.image!.compressedSize!),
+                            ),
+                        ],
                       ],
                     ),
                   ),
@@ -550,7 +596,7 @@ class DealDetailScreen extends ConsumerWidget {
   String _calcDiscount(double original, double current) {
     if (original <= 0) return '';
     final discount = (current / original * 10).toStringAsFixed(1);
-    return '${discount}折';
+    return '$discount折';
   }
 
   void _openImageViewer(BuildContext context, String imagePath) {
@@ -681,17 +727,17 @@ class _ImageViewerScreen extends StatelessWidget {
         ),
       ),
       body: Center(
-        child: InteractiveViewer(
-          minScale: 0.5,
-          maxScale: 5.0,
-          child: Image.asset(
-            imagePath,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Center(
-              child: Icon(Icons.broken_image, color: Colors.white38, size: 64),
+          child: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 5.0,
+            child: Image.file(
+              File(imagePath),
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Center(
+                child: Icon(Icons.broken_image, color: Colors.white38, size: 64),
+              ),
             ),
           ),
-        ),
       ),
     );
   }

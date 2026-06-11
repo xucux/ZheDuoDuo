@@ -1,13 +1,16 @@
 // 图片压缩与存储工具
 //
-// 负责将用户选择的图片复制到应用图片目录，
+// 负责将用户选择的图片压缩后保存到应用图片目录，
 // 并返回压缩结果信息（路径、尺寸、大小）。
-// 实际图片压缩需在 UI 层通过 flutter_image_compress 等库完成。
+// 使用 flutter_image_compress 执行实际压缩，压缩参数从数据库配置读取。
 
 import 'dart:io';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
+
+import '../database/daos/image_compress_settings_dao.dart';
 
 /// 图片压缩结果
 class ImageCompressResult {
@@ -32,53 +35,101 @@ class ImageCompressResult {
     required this.compressedSize,
     required this.quality,
   });
+
+  /// 压缩率百分比（如 65 表示压缩后体积为原来的 65%）
+  double get compressionRatio =>
+      originalSize > 0 ? (compressedSize / originalSize * 100) : 100;
 }
 
 /// 图片处理工具类
 ///
-/// 提供图片目录获取、图片文件复制/准备、图片删除等静态方法。
+/// 提供图片目录获取、图片压缩/存储、图片删除等静态方法。
+/// 压缩时根据文件大小从 ImageCompressSettings 表匹配对应档位的压缩参数。
 class ImageUtils {
   static const _uuid = Uuid();
-  /// 最大图片宽度（超过此宽度需压缩）
-  static const int maxWidth = 800;
-  /// 默认压缩质量
-  static const int defaultQuality = 70;
 
-  /// Get the images directory
+  /// 获取存储根目录（Android 使用应用外部私有目录）
+  static Future<Directory> _getRootDir() async {
+    if (Platform.isAndroid) {
+      final externalDir = await getExternalStorageDirectory();
+      if (externalDir != null) {
+        return externalDir;
+      }
+    }
+    return getApplicationDocumentsDirectory();
+  }
+
+  /// 获取图片存储目录
   static Future<Directory> getImagesDirectory() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final imgDir = Directory(p.join(appDir.path, 'zheduoduo_data', 'images'));
+    final rootDir = await _getRootDir();
+    final imgDir = Directory(p.join(rootDir.path, 'zheduoduo_data', 'images'));
     if (!imgDir.existsSync()) {
       imgDir.createSync(recursive: true);
     }
     return imgDir;
   }
 
-  /// Copy and prepare an image file for storage
-  /// Note: For full compression, use flutter_image_compress_common in the UI layer
+  /// 压缩并保存图片到应用图片目录
+  ///
+  /// 根据 [compressDao] 中按文件大小分档的配置自动选择压缩参数。
+  /// 压缩流程：
+  /// 1. 读取原始文件大小，从数据库匹配压缩档位（quality、maxWidth）
+  /// 2. 使用 flutter_image_compress 执行 JPEG 压缩
+  /// 3. 将压缩结果写入图片目录
+  ///
+  /// [sourceFile] 原始图片文件
+  /// [compressDao] 压缩配置 DAO，用于读取分档配置
+  /// [dealId] 可选，关联优惠 ID，用作文件名
   static Future<ImageCompressResult?> prepareImage(
     File sourceFile, {
     String? dealId,
-    int quality = defaultQuality,
+    required ImageCompressSettingsDao compressDao,
   }) async {
     try {
       final imgDir = await getImagesDirectory();
       final id = dealId ?? _uuid.v4();
-      final ext = p.extension(sourceFile.path).toLowerCase();
-      final targetPath = p.join(imgDir.path, '$id${ext.isEmpty ? '.jpg' : ext}');
+      final targetPath = p.join(imgDir.path, '$id.jpg');
 
       final originalSize = await sourceFile.length();
 
-      // Copy file to images directory
-      final targetFile = await sourceFile.copy(targetPath);
-      final compressedSize = await targetFile.length();
+      // 从数据库获取匹配当前文件大小的压缩配置
+      final setting = await compressDao.getSettingForSize(originalSize);
+      final quality = setting.quality;
+      final maxWidth = setting.maxWidth > 0 ? setting.maxWidth : 1600;
+
+      // 使用 flutter_image_compress 压缩
+      final compressedBytes = await FlutterImageCompress.compressWithFile(
+        sourceFile.absolute.path,
+        minWidth: maxWidth,
+        quality: quality,
+        format: CompressFormat.jpeg,
+        keepExif: false,
+      );
+
+      if (compressedBytes == null) {
+        // 压缩失败，回退到直接复制
+        final targetFile = await sourceFile.copy(targetPath);
+        final copiedSize = await targetFile.length();
+        return ImageCompressResult(
+          filePath: targetPath,
+          width: 0,
+          height: 0,
+          originalSize: originalSize,
+          compressedSize: copiedSize,
+          quality: 100,
+        );
+      }
+
+      // 写入压缩后的数据
+      final targetFile = File(targetPath);
+      await targetFile.writeAsBytes(compressedBytes);
 
       return ImageCompressResult(
         filePath: targetPath,
         width: 0,
         height: 0,
         originalSize: originalSize,
-        compressedSize: compressedSize,
+        compressedSize: compressedBytes.length,
         quality: quality,
       );
     } catch (e) {
@@ -86,11 +137,45 @@ class ImageUtils {
     }
   }
 
-  /// Delete an image file
+  /// 删除图片文件
   static Future<void> deleteImage(String imagePath) async {
     final file = File(imagePath);
     if (file.existsSync()) {
       await file.delete();
     }
+  }
+
+  /// 清理已标记删除的图片文件
+  ///
+  /// [deletedImages] 数据库中 deleted != 0 的图片路径列表。
+  /// 删除本地文件后返回 (deletedCount, freedBytes)。
+  static Future<({int deletedCount, int freedBytes})> cleanupOrphanedImages(
+    List<String> imagePaths,
+  ) async {
+    int deletedCount = 0;
+    int freedBytes = 0;
+
+    for (final path in imagePaths) {
+      final file = File(path);
+      if (file.existsSync()) {
+        freedBytes += await file.length();
+        await file.delete();
+        deletedCount++;
+      }
+    }
+
+    return (deletedCount: deletedCount, freedBytes: freedBytes);
+  }
+
+  /// 格式化文件大小为可读字符串
+  ///
+  /// 例如：1024 → "1.0 KB"，1048576 → "1.0 MB"
+  static String formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }

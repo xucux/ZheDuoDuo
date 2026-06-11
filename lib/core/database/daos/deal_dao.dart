@@ -50,6 +50,8 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
     String? searchQuery,
     String sortBy = 'created_at',
     bool ascending = false,
+    DateTime? startDate,
+    DateTime? endDate,
     int? limit,
     int offset = 0,
   }) {
@@ -60,6 +62,13 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
     }
     if (category != null && category.isNotEmpty) {
       query.where((t) => t.category.equals(category));
+    }
+    if (startDate != null && endDate != null) {
+      query.where((t) => t.createdAt.isBetweenValues(startDate, endDate));
+    } else if (startDate != null) {
+      query.where((t) => t.createdAt.isBiggerOrEqualValue(startDate));
+    } else if (endDate != null) {
+      query.where((t) => t.createdAt.isSmallerOrEqualValue(endDate));
     }
 
     // Sorting
@@ -145,16 +154,44 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
         );
       }
 
-      // Replace coupons
-      await (delete(coupons)..where((t) => t.dealId.equals(deal.id))).go();
+      // Upsert coupons: 存在主键执行修改，不存在新增，提交入参中id不存在的数据删除
+      final submittedIds = dealWithDetails.coupons
+          .where((c) => c.id > 0)
+          .map((c) => c.id)
+          .toSet();
+
+      // 删除数据库中存在但提交中不存在的优惠券
+      await (delete(coupons)
+            ..where((t) => t.dealId.equals(deal.id) & t.id.isNotIn(submittedIds)))
+          .go();
+
+      // Upsert 提交的优惠券
       for (var i = 0; i < dealWithDetails.coupons.length; i++) {
         final c = dealWithDetails.coupons[i];
-        await into(coupons).insert(c.copyWith(dealId: deal.id, sortOrder: i));
+        final couponToSave = c.copyWith(dealId: deal.id, sortOrder: i);
+
+        if (c.id > 0) {
+          // 存在主键，执行更新
+          await update(coupons).replace(couponToSave);
+        } else {
+          // 不存在主键，执行新增
+          await into(coupons).insert(couponToSave);
+        }
       }
 
-      // Upsert image
+      // Upsert or mark deleted image
       if (dealWithDetails.image != null) {
         await into(dealImages).insertOnConflictUpdate(dealWithDetails.image!);
+      } else {
+        final existing = await (select(dealImages)..where((t) => t.dealId.equals(deal.id))).getSingleOrNull();
+        if (existing != null && existing.deleted == 0) {
+          await (update(dealImages)..where((t) => t.dealId.equals(deal.id))).write(
+            DealImagesCompanion(
+              deleted: const Value(2),
+              updatedAt: Value(DateTime.now()),
+            ),
+          );
+        }
       }
     });
   }
@@ -216,6 +253,28 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
       ..addColumns([dealTags.tag]);
     final results = await query.get();
     return results.map((r) => r.read(dealTags.tag)!).toList();
+  }
+
+  /// Get all deal IDs that have active (non-deleted) images
+  Future<Set<String>> getAllImageDealIds() async {
+    final query = selectOnly(dealImages, distinct: true)
+      ..addColumns([dealImages.dealId])
+      ..where(dealImages.deleted.equals(0));
+    final results = await query.get();
+    return results.map((r) => r.read(dealImages.dealId)!).toSet();
+  }
+
+  /// Get all deleted (deleted != 0) image paths for cleanup
+  Future<List<({String dealId, String imagePath})>> getDeletedImagePaths() async {
+    final query = select(dealImages)..where((t) => t.deleted.isNotValue(0));
+    final results = await query.get();
+    return results.map((r) => (dealId: r.dealId, imagePath: r.imagePath)).toList();
+  }
+
+  /// Delete all deal_images records where deleted != 0 (after file cleanup)
+  Future<int> purgeDeletedImages() async {
+    final deleted = await (delete(dealImages)..where((t) => t.deleted.isNotValue(0))).go();
+    return deleted;
   }
 
   /// Count total deals

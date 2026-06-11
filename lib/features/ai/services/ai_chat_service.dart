@@ -18,6 +18,8 @@ const _kChatSettings = 'zdd_ai_chat_settings';
 /// AI 会话列表的 SharedPreferences 键
 const _kChatSessions = 'zdd_ai_chat_sessions';
 
+
+
 // ==================== 对话设置服务 ====================
 
 /// AI 对话设置服务
@@ -45,6 +47,7 @@ class AiChatSettingsService {
   Future<bool> save(AiChatSettings settings) {
     return _prefs.setString(_kChatSettings, json.encode(settings.toJson()));
   }
+
 }
 
 // ==================== 会话存储服务 ====================
@@ -114,6 +117,7 @@ class AiChatSessionService {
     String sessionId,
     ChatMessageRole role,
     String content, {
+    String? reasoningContent,
     List<String> imagePaths = const [],
   }) {
     final sessions = loadSessions();
@@ -124,6 +128,7 @@ class AiChatSessionService {
       id: 'm_${DateTime.now().millisecondsSinceEpoch}',
       role: role,
       content: content,
+      reasoningContent: reasoningContent,
       imagePaths: imagePaths,
       createdAt: DateTime.now(),
     );

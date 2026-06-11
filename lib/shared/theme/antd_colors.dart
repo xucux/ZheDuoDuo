@@ -1,9 +1,24 @@
+// Ant Design 5.0 色板与设计令牌
+//
+// 定义折多多应用的完整色彩体系，包括：
+// - 品牌绿色板（primary 系列）
+// - 功能色（success / warning / error / info）
+// - 亮色模式中性色（文字、背景、边框、分割线）
+// - 暗色模式中性色
+// - 填充色（亮色/暗色各四级）
+// - 平台品牌色（京东/淘宝/天猫/拼多多等）
+// - 圆角、间距、字号等设计令牌
+// 参考: https://ant.design/docs/spec/colors
+
 import 'package:flutter/material.dart';
 
-/// Ant Design 5.0 色板
-/// 参考: https://ant.design/docs/spec/colors
+/// Ant Design 5.0 色板与设计令牌
+///
+/// 提供应用全局使用的颜色常量和设计规范数值。
+/// 所有颜色均为静态常量，不可修改。
 class AntdColors {
   // ===== 品牌绿 (Volcano / Green) =====
+  /// 品牌主色
   static const Color primary = Color(0xFF46C01B);
   static const Color primaryHover = Color(0xFF5CD32E);
   static const Color primaryActive = Color(0xFF3AA816);
@@ -78,6 +93,7 @@ class AntdColors {
     '其他': Color(0xFF8C8C8C),
   };
 
+  /// 根据平台名称获取品牌色，未知平台返回灰色
   static Color getPlatformColor(String platform) {
     return platformColors[platform] ?? platformColors['其他']!;
   }

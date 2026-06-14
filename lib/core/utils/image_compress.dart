@@ -92,6 +92,20 @@ class ImageUtils {
 
       final originalSize = await sourceFile.length();
 
+      // flutter_image_compress 不支持 Windows/Linux，直接复制
+      if (Platform.isWindows || Platform.isLinux) {
+        final targetFile = await sourceFile.copy(targetPath);
+        final copiedSize = await targetFile.length();
+        return ImageCompressResult(
+          filePath: targetPath,
+          width: 0,
+          height: 0,
+          originalSize: originalSize,
+          compressedSize: copiedSize,
+          quality: 100,
+        );
+      }
+
       // 从数据库获取匹配当前文件大小的压缩配置
       final setting = await compressDao.getSettingForSize(originalSize);
       final quality = setting.quality;

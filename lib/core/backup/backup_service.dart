@@ -45,7 +45,7 @@ class BackupResult {
 /// 提供优惠数据的 zip 格式导出/导入，以及备份文件管理。
 /// 数据存储在外部存储（Android）或应用文档目录的 zheduoduo_data/ 下。
 class BackupService {
-  final AppDatabase _db;
+  AppDatabase _db;
 
   BackupService(this._db);
 
@@ -222,7 +222,11 @@ class BackupService {
         }
       }
 
-      return BackupResult.success(filePath: zipPath, fileSize: zipBytes.length, dealCount: dealCount);
+      return BackupResult.success(
+        filePath: zipPath,
+        fileSize: zipBytes.length,
+        dealCount: dealCount,
+      );
     } catch (e, stack) {
       developer.log('导入失败', name: 'BackupService', error: e, stackTrace: stack);
       return BackupResult.failure('导入失败: $e');

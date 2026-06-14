@@ -1,175 +1,74 @@
-// OCR 文字识别服务
+// OCR 文字识别服务 - 统一门面
 //
-// 基于 Google ML Kit Text Recognition 提供图片文字识别功能。
-// 支持中文脚本识别，提供多种输出格式：
-// - 纯文本、结构化 JSON、Markdown 格式
-// - 支持文件路径和二进制字节两种输入方式
+// 向后兼容的 OCR 服务入口，自动委托给当前平台的实现：
+// - 移动端（Android / iOS）：Google ML Kit
+// - 桌面端（Windows / macOS / Linux）：Tesseract OCR
+//
+// 此文件保持原有 OcrService 类名和 API 不变，内部通过 [OcrServiceProvider] 选择平台实现。
+// 新代码建议直接使用 [OcrServiceProvider.create()] 获取服务实例。
 
-import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:path_provider/path_provider.dart';
+import 'ocr_service_interface.dart';
+import 'ocr_service_provider.dart';
 
-/// OCR 文字识别服务
+/// OCR 文字识别服务（向后兼容门面）
 ///
-/// 使用 Google ML Kit 的 TextRecognizer（中文脚本）进行图片文字识别。
-/// 每次识别都会创建并关闭 Recognizer 实例，避免资源泄漏。
+/// 保持原有 OcrService 类名和 API 不变，内部委托给平台实现。
+/// 移动端使用 Google ML Kit，桌面端使用 Tesseract OCR。
 class OcrService {
-  OcrService();
+  /// 平台实际的 OCR 实现
+  final OcrServiceBase _impl;
 
-  /// 将二进制图片数据保存为临时文件
-  ///
-  /// [bytes] 图片二进制数据，返回临时文件路径。
-  Future<String> _saveTempImage(Uint8List bytes) async {
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/ocr_${DateTime.now().millisecondsSinceEpoch}.png');
-    await file.writeAsBytes(bytes);
-    return file.path;
-  }
+  OcrService() : _impl = OcrServiceProvider.create();
 
   /// 识别图片中的文字（纯文本）
   ///
   /// [imagePath] 图片文件路径，返回识别出的全部文本。
-  Future<String> recognizeImage(String imagePath) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.chinese);
-    try {
-      final inputImage = InputImage.fromFilePath(imagePath);
-      final result = await recognizer.processImage(inputImage);
-      return result.text;
-    } finally {
-      recognizer.close();
-    }
-  }
+  Future<String> recognizeImage(String imagePath) =>
+      _impl.recognizeImage(imagePath);
 
-  /// 识别图片中的文字（返回 ML Kit 原始结果对象）
+  /// 识别图片中的文字（结构化结果）
   ///
-  /// [imagePath] 图片文件路径，返回 [RecognizedText] 包含块、行、元素等详细信息。
-  Future<RecognizedText> recognizeDetailed(String imagePath) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.chinese);
-    try {
-      final inputImage = InputImage.fromFilePath(imagePath);
-      return await recognizer.processImage(inputImage);
-    } finally {
-      recognizer.close();
-    }
-  }
+  /// [imagePath] 图片文件路径，返回 [OcrStructuredResult] 包含块、行、元素等详细信息。
+  Future<OcrStructuredResult> recognizeStructured(String imagePath) =>
+      _impl.recognizeStructured(imagePath);
 
-  /// 识别图片中的文字（结构化 JSON）
+  /// 识别图片中的文字（结构化 JSON Map）
   ///
   /// [imagePath] 图片文件路径，返回包含 fullText、blockCount、blocks 的 Map。
-  /// 每个 block 包含 text、boundingBox、cornerPoints、lines 等信息。
-  Future<Map<String, dynamic>> recognizeStructured(String imagePath) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.chinese);
-    try {
-      final inputImage = InputImage.fromFilePath(imagePath);
-      final result = await recognizer.processImage(inputImage);
-      final blocks = result.blocks.map((block) {
-        return {
-          'text': block.text,
-          'boundingBox': {
-            'left': block.boundingBox.left,
-            'top': block.boundingBox.top,
-            'width': block.boundingBox.width,
-            'height': block.boundingBox.height,
-          },
-          'cornerPoints': block.cornerPoints
-              .map((p) => {'x': p.x, 'y': p.y})
-              .toList(),
-          'lines': block.lines.map((line) {
-            return {
-              'text': line.text,
-              'boundingBox': {
-                'left': line.boundingBox.left,
-                'top': line.boundingBox.top,
-                'width': line.boundingBox.width,
-                'height': line.boundingBox.height,
-              },
-              'elements': line.elements.map((element) {
-                return {
-                  'text': element.text,
-                  'confidence': element.confidence,
-                  'boundingBox': {
-                    'left': element.boundingBox.left,
-                    'top': element.boundingBox.top,
-                    'width': element.boundingBox.width,
-                    'height': element.boundingBox.height,
-                  },
-                };
-              }).toList(),
-            };
-          }).toList(),
-        };
-      }).toList();
-      return {
-        'fullText': result.text,
-        'blockCount': blocks.length,
-        'blocks': blocks,
-      };
-    } finally {
-      recognizer.close();
-    }
-  }
-
-  /// 从二进制数据识别文字（纯文本）
-  ///
-  /// [bytes] 图片二进制数据，自动保存为临时文件后识别，识别完毕后删除临时文件。
-  Future<String> recognizeImageFromBytes(Uint8List bytes) async {
-    final path = await _saveTempImage(bytes);
-    try {
-      return await recognizeImage(path);
-    } finally {
-      try {
-        await File(path).delete();
-      } catch (_) {}
-    }
-  }
-
-  /// 从二进制数据识别文字（结构化 JSON）
-  Future<Map<String, dynamic>> recognizeStructuredFromBytes(Uint8List bytes) async {
-    final path = await _saveTempImage(bytes);
-    try {
-      return await recognizeStructured(path);
-    } finally {
-      try {
-        await File(path).delete();
-      } catch (_) {}
-    }
-  }
-
-  /// 从二进制数据识别文字（Markdown 格式）
-  Future<String> recognizeAsMarkdownFromBytes(Uint8List bytes) async {
-    final path = await _saveTempImage(bytes);
-    try {
-      return await recognizeAsMarkdown(path);
-    } finally {
-      try {
-        await File(path).delete();
-      } catch (_) {}
-    }
+  /// 此方法为向后兼容保留，内部将 OcrStructuredResult 转为 Map。
+  Future<Map<String, dynamic>> recognizeStructuredMap(String imagePath) async {
+    final result = await _impl.recognizeStructured(imagePath);
+    return result.toMap();
   }
 
   /// 识别图片中的文字（Markdown 格式）
   ///
   /// [imagePath] 图片文件路径，返回 Markdown 格式的识别结果，
   /// 按文本块分节输出。
-  Future<String> recognizeAsMarkdown(String imagePath) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.chinese);
-    try {
-      final inputImage = InputImage.fromFilePath(imagePath);
-      final result = await recognizer.processImage(inputImage);
-      final buffer = StringBuffer();
-      buffer.writeln('# OCR 识别结果\n');
-      final blocks = result.blocks;
-      for (int i = 0; i < blocks.length; i++) {
-        final block = blocks[i];
-        buffer.writeln('## 文本块 ${i + 1}\n');
-        buffer.writeln('${block.text}\n');
-        buffer.writeln('---\n');
-      }
-      return buffer.toString();
-    } finally {
-      recognizer.close();
-    }
+  Future<String> recognizeAsMarkdown(String imagePath) =>
+      _impl.recognizeAsMarkdown(imagePath);
+
+  /// 从二进制数据识别文字（纯文本）
+  ///
+  /// [bytes] 图片二进制数据，自动保存为临时文件后识别，识别完毕后删除临时文件。
+  Future<String> recognizeImageFromBytes(Uint8List bytes) =>
+      _impl.recognizeImageFromBytes(bytes);
+
+  /// 从二进制数据识别文字（结构化 JSON Map）
+  ///
+  /// 此方法为向后兼容保留。
+  Future<Map<String, dynamic>> recognizeStructuredFromBytesMap(Uint8List bytes) async {
+    final result = await _impl.recognizeStructuredFromBytes(bytes);
+    return result.toMap();
   }
+
+  /// 从二进制数据识别文字（结构化结果）
+  Future<OcrStructuredResult> recognizeStructuredFromBytes(Uint8List bytes) =>
+      _impl.recognizeStructuredFromBytes(bytes);
+
+  /// 从二进制数据识别文字（Markdown 格式）
+  Future<String> recognizeAsMarkdownFromBytes(Uint8List bytes) =>
+      _impl.recognizeAsMarkdownFromBytes(bytes);
 }

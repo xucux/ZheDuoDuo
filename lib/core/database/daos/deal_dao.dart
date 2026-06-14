@@ -14,6 +14,7 @@ import '../tables/deal_tags.dart';
 import '../tables/deal_promotions.dart';
 import '../tables/coupons.dart';
 import '../tables/deal_images.dart';
+import 'sync_dao.dart';
 
 part 'deal_dao.g.dart';
 
@@ -41,13 +42,37 @@ class DealWithDetails {
 /// 提供优惠记录的 CRUD、筛选排序、软删除等数据库操作。
 @DriftAccessor(tables: [Deals, DealTags, DealPromotions, Coupons, DealImages])
 class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
-  DealDao(super.db);
+  final SyncDao? _syncDao;
+
+  DealDao(super.db, [this._syncDao]);
+
+  /// 记录 deal 变更到 sync_changelog（用于增量同步）
+  Future<void> _logChange(String entityId, String operation) async {
+    final syncDao = _syncDao;
+    if (syncDao == null) return;
+    final deviceId = await syncDao.getDeviceIdOrNull();
+    if (deviceId == null || deviceId.isEmpty) return;
+    final revision = await syncDao.nextRevision();
+    await syncDao.logChange(deviceId, 'deal', entityId, operation, revision);
+  }
 
   /// Watch all deals with filters
+  ///
+  /// [platform] 平台筛选（传入 [searchQuery] 时忽略）
+  /// [category] 分类筛选（传入 [searchQuery] 时忽略）
+  /// [searchQuery] 模糊搜索关键字（标题/平台/分类/备注/标签）
+  /// [tag] 标签精确匹配（传入 [searchQuery] 时忽略）
+  /// [sortBy] 排序字段：'price' | 'title' | 'updated_at' | 'created_at'
+  /// [ascending] 是否升序排序，默认降序
+  /// [startDate] 创建时间起始筛选（传入 [searchQuery] 时忽略）
+  /// [endDate] 创建时间截止筛选（传入 [searchQuery] 时忽略）
+  /// [limit] 分页每页数量
+  /// [offset] 分页偏移量
   Stream<List<DealWithDetails>> watchAllDeals({
     String? platform,
     String? category,
     String? searchQuery,
+    String? tag,
     String sortBy = 'created_at',
     bool ascending = false,
     DateTime? startDate,
@@ -55,20 +80,23 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
     int? limit,
     int offset = 0,
   }) {
+    final hasSearch = searchQuery != null && searchQuery.isNotEmpty;
     final query = select(deals)..where((t) => t.deleted.equals(0));
 
-    if (platform != null && platform.isNotEmpty) {
-      query.where((t) => t.platform.equals(platform));
-    }
-    if (category != null && category.isNotEmpty) {
-      query.where((t) => t.category.equals(category));
-    }
-    if (startDate != null && endDate != null) {
-      query.where((t) => t.createdAt.isBetweenValues(startDate, endDate));
-    } else if (startDate != null) {
-      query.where((t) => t.createdAt.isBiggerOrEqualValue(startDate));
-    } else if (endDate != null) {
-      query.where((t) => t.createdAt.isSmallerOrEqualValue(endDate));
+    if (!hasSearch) {
+      if (platform != null && platform.isNotEmpty) {
+        query.where((t) => t.platform.equals(platform));
+      }
+      if (category != null && category.isNotEmpty) {
+        query.where((t) => t.category.equals(category));
+      }
+      if (startDate != null && endDate != null) {
+        query.where((t) => t.createdAt.isBetweenValues(startDate, endDate));
+      } else if (startDate != null) {
+        query.where((t) => t.createdAt.isBiggerOrEqualValue(startDate));
+      } else if (endDate != null) {
+        query.where((t) => t.createdAt.isSmallerOrEqualValue(endDate));
+      }
     }
 
     // Sorting
@@ -107,6 +135,14 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
             if (!tags.any((t) => t.toLowerCase().contains(lowerQuery))) {
               continue;
             }
+          }
+        }
+
+        // Tag filter
+        if (!hasSearch && tag != null && tag.isNotEmpty) {
+          final tags = await _getTagsForDeal(deal.id);
+          if (!tags.any((t) => t.toLowerCase() == tag.toLowerCase())) {
+            continue;
           }
         }
 
@@ -168,14 +204,21 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
       // Upsert 提交的优惠券
       for (var i = 0; i < dealWithDetails.coupons.length; i++) {
         final c = dealWithDetails.coupons[i];
-        final couponToSave = c.copyWith(dealId: deal.id, sortOrder: i);
 
         if (c.id > 0) {
           // 存在主键，执行更新
+          final couponToSave = c.copyWith(dealId: deal.id, sortOrder: i);
           await update(coupons).replace(couponToSave);
         } else {
-          // 不存在主键，执行新增
-          await into(coupons).insert(couponToSave);
+          // 不存在主键，执行新增（使用 Companion 不传入 id，让 autoIncrement 生成）
+          await into(coupons).insert(CouponsCompanion(
+            dealId: Value(deal.id),
+            sortOrder: Value(i),
+            count: Value(c.count),
+            source: Value(c.source),
+            strength: Value(c.strength),
+            note: Value(c.note),
+          ));
         }
       }
 
@@ -194,6 +237,8 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
         }
       }
     });
+    // 记录变更日志（事务外，避免影响主事务性能）
+    await _logChange(deal.id, 'upsert');
   }
 
   /// Soft delete a deal (pending_delete)
@@ -202,31 +247,54 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
     final deal = await (select(deals)..where((t) => t.id.equals(id))).getSingleOrNull();
     if (deal == null) return;
 
-    await (update(deals)..where((t) => t.id.equals(id))).write(
-      DealsCompanion(
-        deleted: const Value(2),
-        deletedAt: Value(now),
-        updatedAt: Value(now),
-        revision: Value(deal.revision + 1),
-      ),
-    );
+    await transaction(() async {
+      await (update(deals)..where((t) => t.id.equals(id))).write(
+        DealsCompanion(
+          deleted: const Value(2),
+          deletedAt: Value(now),
+          updatedAt: Value(now),
+          revision: Value(deal.revision + 1),
+        ),
+      );
+
+      // 同步逻辑删除关联图片
+      await (update(dealImages)..where((t) => t.dealId.equals(id) & t.deleted.equals(0))).write(
+        DealImagesCompanion(
+          deleted: const Value(2),
+          updatedAt: Value(now),
+        ),
+      );
+    });
+    await _logChange(id, 'pending_delete');
   }
 
   /// Hard delete a deal
   Future<void> hardDeleteDeal(String id) async {
     await (delete(deals)..where((t) => t.id.equals(id))).go();
+    await _logChange(id, 'delete');
   }
 
   /// Restore a soft-deleted deal
   Future<void> restoreDeal(String id) async {
     final now = DateTime.now();
-    await (update(deals)..where((t) => t.id.equals(id))).write(
-      DealsCompanion(
-        deleted: const Value(0),
-        deletedAt: const Value(null),
-        updatedAt: Value(now),
-      ),
-    );
+    await transaction(() async {
+      await (update(deals)..where((t) => t.id.equals(id))).write(
+        DealsCompanion(
+          deleted: const Value(0),
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+        ),
+      );
+
+      // 同步恢复关联图片
+      await (update(dealImages)..where((t) => t.dealId.equals(id) & t.deleted.isNotValue(0))).write(
+        DealImagesCompanion(
+          deleted: const Value(0),
+          updatedAt: Value(now),
+        ),
+      );
+    });
+    await _logChange(id, 'upsert');
   }
 
   /// Get all unique platforms

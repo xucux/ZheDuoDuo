@@ -326,7 +326,7 @@ createApp({
       aiChat: defaultChatSettings(),
       defaultSort: 'date-desc',
       filterTimeRange: '3m', // 1m | 3m | 6m | 1y | all
-      listDisplayMode: 'normal', // normal | simple
+      listDisplayMode: 'normal', // normal | grid
       currency: '¥',
       autoBackup: false,
       cloud: {
@@ -664,6 +664,8 @@ createApp({
     }
 
     function migrateDeal(d) {
+      const hasDiscount = d.originalPrice && d.originalPrice > d.currentPrice;
+      const calcDiscount = hasDiscount ? (d.currentPrice / d.originalPrice * 10).toFixed(1) + '折' : '';
       return {
         ...emptyForm(),
         ...d,
@@ -676,6 +678,8 @@ createApp({
         currentDisplayPrice: d.currentDisplayPrice ?? null,
         asciiArt: d.asciiArt || '',
         image: d.visualType === 'none' ? '' : (d.image || ''),
+        isLowestPrice: d.isLowestPrice ?? 0,
+        discount: d.discount || calcDiscount,
       };
     }
 
@@ -697,6 +701,8 @@ createApp({
         }
         if (!w.url && w.provider !== 'custom') applyWebdavPreset(w, w.provider);
         if (w.autoSync == null) w.autoSync = false;
+        // 兼容旧版 simple 模式 → 改为 grid
+        if (merged.listDisplayMode === 'simple') merged.listDisplayMode = 'grid';
         // 恢复 AI 对话独立设置
         const chat = loadChatSettings();
         merged.aiChat = { ...defaultChatSettings(), ...merged.aiChat, ...chat };
@@ -1231,9 +1237,11 @@ createApp({
     }
 
     function toggleListDisplayMode() {
-      const next = settings.listDisplayMode === 'simple' ? 'normal' : 'simple';
+      const modes = ['normal', 'grid'];
+      const idx = modes.indexOf(settings.listDisplayMode);
+      const next = modes[(idx + 1) % modes.length];
       setListDisplayMode(next);
-      showToast(next === 'simple' ? '简单展示' : '正常展示');
+      showToast(next === 'grid' ? '卡片展示' : '列表展示');
     }
 
     function setTheme(t) { settings.theme = t; saveSettings(); }

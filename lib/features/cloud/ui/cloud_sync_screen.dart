@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:restart_app/restart_app.dart';
 import '../../../core/utils/logger_util.dart';
 import '../../../core/sync/transports/sync_transport.dart';
 import '../../../core/sync/transports/webdav_transport.dart';
@@ -31,7 +32,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   final _webdavUrlController = TextEditingController();
   final _webdavUsernameController = TextEditingController();
   final _webdavPasswordController = TextEditingController();
-  final _webdavPathController = TextEditingController(text: '/zheduoduo/');
+  final _dirPrefixController = TextEditingController(text: 'zheduoduo');
   String _webdavPreset = 'custom';
 
   // COS
@@ -45,7 +46,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   final _ossAccessKeyIdController = TextEditingController();
   final _ossAccessKeySecretController = TextEditingController();
   final _ossBucketController = TextEditingController();
-  final _ossRegionController = TextEditingController(text: 'oss-cn-hangzhou');
+  final _ossRegionController = TextEditingController(text: 'cn-hangzhou');
 
   @override
   void initState() {
@@ -58,7 +59,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     _webdavUrlController.dispose();
     _webdavUsernameController.dispose();
     _webdavPasswordController.dispose();
-    _webdavPathController.dispose();
+    _dirPrefixController.dispose();
     _cosSecretIdController.dispose();
     _cosSecretKeyController.dispose();
     _cosBucketController.dispose();
@@ -91,7 +92,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     _webdavUrlController.text = await secretsDao.getValue('webdav', 'url') ?? '';
     _webdavUsernameController.text = await secretsDao.getValue('webdav', 'username') ?? '';
     _webdavPasswordController.text = await secretsDao.getValue('webdav', 'password') ?? '';
-    _webdavPathController.text = await secretsDao.getValue('webdav', 'path') ?? '/zheduoduo/';
+    _dirPrefixController.text = await settingsDao.getValue('cloud.dirPrefix') ?? 'zheduoduo';
 
     // COS
     _cosSecretIdController.text = await secretsDao.getValue('cos', 'secretId') ?? '';
@@ -104,7 +105,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     _ossAccessKeyIdController.text = await secretsDao.getValue('oss', 'accessKeyId') ?? '';
     _ossAccessKeySecretController.text = await secretsDao.getValue('oss', 'accessKeySecret') ?? '';
     _ossBucketController.text = await secretsDao.getValue('oss', 'bucket') ?? '';
-    _ossRegionController.text = await secretsDao.getValue('oss', 'region') ?? 'oss-cn-hangzhou';
+    _ossRegionController.text = await secretsDao.getValue('oss', 'region') ?? 'cn-hangzhou';
   }
 
   @override
@@ -119,6 +120,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
             children: [
               _buildStatusCard(theme),
               _buildProviderSection(theme),
+              _buildDirPrefixField(),
               if (_syncProvider == 'webdav') _buildWebDavSection(theme),
               if (_syncProvider == 'cos') _buildCosSection(theme),
               if (_syncProvider == 'oss') _buildOssSection(theme),
@@ -246,6 +248,25 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     );
   }
 
+  Widget _buildDirPrefixField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(context, '远端目录前缀'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            '所有云存储的文件将存放在此前缀目录下',
+            style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.outline),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(_dirPrefixController, '目录前缀', 'zheduoduo'),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   Widget _buildWebDavSection(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,8 +299,6 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
         _buildTextField(_webdavUsernameController, '用户名'),
         const SizedBox(height: 12),
         _buildTextField(_webdavPasswordController, '密码', null, true, _webdavPasswordVisible, () => setState(() => _webdavPasswordVisible = !_webdavPasswordVisible)),
-        const SizedBox(height: 12),
-        _buildTextField(_webdavPathController, '远端路径', '/zheduoduo/'),
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -335,7 +354,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
         _buildSectionHeader(context, '阿里云 OSS 配置'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text('需要阿里云 OSS 的 AccessKey 和存储桶信息。',
+          child: Text('需要阿里云 OSS 的 AccessKey 和存储桶信息。Region 填写地域 ID（如 cn-hangzhou），也支持 oss-cn-hangzhou 格式。',
               style: TextStyle(fontSize: 13, color: theme.colorScheme.outline)),
         ),
         const SizedBox(height: 12),
@@ -345,7 +364,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
         const SizedBox(height: 12),
         _buildTextField(_ossBucketController, 'Bucket 名称'),
         const SizedBox(height: 12),
-        _buildTextField(_ossRegionController, 'Region', 'oss-cn-hangzhou'),
+        _buildTextField(_ossRegionController, 'Region', 'cn-hangzhou'),
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -514,7 +533,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
 
     try {
       final syncService = ref.read(syncServiceProvider);
-      final result = await syncService.smartSync(transport);
+      final result = await syncService.smartSync(transport, dirPrefix: _dirPrefixController.text.trim());
       setState(() {
         _syncing = false;
         _lastSyncAt = DateTime.now().toIso8601String();
@@ -544,7 +563,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _fullDownload();
+              _showRemoteBackupsDialog();
             },
             child: const Text('全量下载'),
           ),
@@ -553,6 +572,122 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
             child: const Text('取消'),
           ),
         ],
+      ),
+    );
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  Future<void> _showRemoteBackupsDialog() async {
+    final transport = _createTransport();
+    if (transport == null) return;
+
+    _saveCredentials();
+
+    List<RemoteFileInfo> files = [];
+    String? error;
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      files = await syncService.listFullBackups(transport, dirPrefix: _dirPrefixController.text.trim());
+    } catch (e) {
+      error = e.toString();
+    }
+
+    if (!context.mounted) return;
+
+    if (files.isEmpty) {
+      _showSnackBar(error ?? '远端无全量备份');
+      return;
+    }
+
+    String selected = files.first.name;
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, setStateLocal) {
+          return AlertDialog(
+            title: const Text('选择要下载的备份'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: files.length,
+                itemBuilder: (context, index) {
+                  final file = files[index];
+                  final isSelected = selected == file.name;
+                  return ListTile(
+                    leading: Icon(
+                      isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                    ),
+                    title: Text(file.name),
+                    subtitle: Text('${_formatFileSize(file.size)} · ${file.modifiedAt.toLocal()}'),
+                    onTap: () => setStateLocal(() => selected = file.name),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                      tooltip: '删除',
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx3) => AlertDialog(
+                            title: const Text('确认删除'),
+                            content: Text('确定要删除远程备份 ${file.name} 吗？此操作不可恢复。'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx3, false), child: const Text('取消')),
+                              TextButton(onPressed: () => Navigator.pop(ctx3, true), child: const Text('删除')),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true) return;
+                        if (!context.mounted) return;
+
+                        try {
+                          final syncService = ref.read(syncServiceProvider);
+                          final result = await syncService.deleteFullBackup(
+                            transport,
+                            file.name,
+                            dirPrefix: _dirPrefixController.text.trim(),
+                          );
+                          if (result.success) {
+                            setStateLocal(() {
+                              files.removeAt(index);
+                              if (selected == file.name && files.isNotEmpty) {
+                                selected = files.first.name;
+                              }
+                            });
+                          }
+                          if (context.mounted) {
+                            _showSnackBar(result.message ?? (result.success ? '删除成功' : '删除失败'), isError: !result.success);
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            _showSnackBar('删除失败: $e');
+                          }
+                        }
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text('取消')),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(ctx2);
+                  _fullDownload(filename: selected);
+                },
+                child: const Text('下载选中'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -566,7 +701,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
 
     try {
       final syncService = ref.read(syncServiceProvider);
-      final result = await syncService.fullUpload(transport);
+      final result = await syncService.fullUpload(transport, dirPrefix: _dirPrefixController.text.trim());
       setState(() {
         _syncing = false;
         _lastSyncAt = DateTime.now().toIso8601String();
@@ -579,7 +714,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     }
   }
 
-  Future<void> _fullDownload() async {
+  Future<void> _fullDownload({String? filename}) async {
     final transport = _createTransport();
     if (transport == null) return;
 
@@ -588,13 +723,23 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
 
     try {
       final syncService = ref.read(syncServiceProvider);
-      final result = await syncService.fullDownload(transport);
+      final result = await syncService.fullDownload(
+        transport,
+        dirPrefix: _dirPrefixController.text.trim(),
+        filename: filename,
+      );
+
       setState(() {
         _syncing = false;
         _lastSyncAt = DateTime.now().toIso8601String();
       });
       _saveSetting('cloud.lastSyncAt', _lastSyncAt);
-      _showResultDialog(result);
+
+      if (result.success && mounted) {
+        _showRestartDialog('全量下载成功，共 ${result.dealCount ?? '?'} 条记录');
+      } else {
+        _showResultDialog(result);
+      }
     } catch (e) {
       setState(() => _syncing = false);
       _showSnackBar('下载失败: $e');
@@ -647,6 +792,27 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     );
   }
 
+  void _showRestartDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('需要重启'),
+        content: Text('$message\n\n数据库已替换，请重启应用以恢复数据连接。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('稍后再说'),
+          ),
+          FilledButton(
+            onPressed: () => Restart.restartApp(),
+            child: const Text('立即重启'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showSnackBar(String message, {bool isError = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -658,10 +824,11 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
 
   void _saveCredentials() {
     final secretsDao = ref.read(secretsDaoProvider);
+    final settingsDao = ref.read(settingsDaoProvider);
+    settingsDao.setValue('cloud.dirPrefix', _dirPrefixController.text);
     secretsDao.setValue('webdav', 'url', _webdavUrlController.text);
     secretsDao.setValue('webdav', 'username', _webdavUsernameController.text);
     secretsDao.setValue('webdav', 'password', _webdavPasswordController.text);
-    secretsDao.setValue('webdav', 'path', _webdavPathController.text);
     secretsDao.setValue('cos', 'secretId', _cosSecretIdController.text);
     secretsDao.setValue('cos', 'secretKey', _cosSecretKeyController.text);
     secretsDao.setValue('cos', 'bucket', _cosBucketController.text);

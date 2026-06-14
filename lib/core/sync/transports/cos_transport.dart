@@ -122,8 +122,9 @@ class CosTransport implements SyncTransport {
 
   @override
   Future<List<String>> list(String prefix) async {
-    final path = _normalizePath(prefix);
-    final query = 'prefix=${Uri.encodeComponent(path)}';
+    // COS 对象 key 不含前导 /，prefix 需要与对象 key 格式一致
+    final normalizedPrefix = prefix.startsWith('/') ? prefix.substring(1) : prefix;
+    final query = 'prefix=${Uri.encodeComponent(normalizedPrefix)}';
     final method = 'GET';
     final signHeaders = <String, String>{
       'Host': Uri.parse(_baseUrl).host,
@@ -256,13 +257,13 @@ class CosTransport implements SyncTransport {
     final keyTime = '$startTime;$endTime';
     final signTime = keyTime;
 
-    final signKey = Hmac(sha1, utf8.encode(_secretKey)).convert(utf8.encode(keyTime)).bytes;
+    final signKey = Hmac(sha1, utf8.encode(_secretKey)).convert(utf8.encode(keyTime)).toString();
 
     // 格式化 headers：key=value，值 URL 编码，用 & 连接
     final headerKeys = headers.keys.map((k) => k.toLowerCase()).toList()..sort();
     final lowerHeaders = headers.map((k, v) => MapEntry(k.toLowerCase(), v));
     final formatHeaders = headerKeys
-        .map((k) => '$k=${Uri.encodeComponent(lowerHeaders[k]!.trim())}')
+        .map((k) => '${_cosUrlEncode(k)}=${_cosUrlEncode(lowerHeaders[k]!.trim())}')
         .join('&');
     final signedHeaderList = headerKeys.join(';');
 
@@ -270,15 +271,16 @@ class CosTransport implements SyncTransport {
     var urlParamList = '';
     var formatParameters = '';
     if (queryParams.isNotEmpty) {
-      final params = queryParams.split('&').map((p) {
+      final entries = queryParams.split('&').map((p) {
         final parts = p.split('=');
-        final key = parts[0];
-        // decodeComponent 还原原始值，再 encodeComponent 统一编码
+        final rawKey = parts[0];
+        final key = rawKey.toLowerCase();
         final value = parts.length > 1 ? Uri.decodeComponent(parts[1]) : '';
-        return '$key=${Uri.encodeComponent(value)}';
-      }).toList()..sort();
-      formatParameters = params.join('&');
-      urlParamList = params.map((p) => p.split('=')[0]).join(';');
+        return MapEntry(key, value);
+      }).toList();
+      entries.sort((a, b) => a.key.compareTo(b.key));
+      formatParameters = entries.map((e) => '${_cosUrlEncode(e.key)}=${_cosUrlEncode(e.value)}').join('&');
+      urlParamList = entries.map((e) => _cosUrlEncode(e.key)).join(';');
     }
 
     // COS 要求 HttpString 中 method 使用小写
@@ -287,7 +289,7 @@ class CosTransport implements SyncTransport {
     final httpStringSha1 = sha1.convert(utf8.encode(httpString)).toString();
 
     final stringToSign = 'sha1\n$signTime\n$httpStringSha1\n';
-    final signatureBytes = Hmac(sha1, signKey).convert(utf8.encode(stringToSign)).bytes;
+    final signatureBytes = Hmac(sha1, utf8.encode(signKey)).convert(utf8.encode(stringToSign)).bytes;
     final signature = _bytesToHex(signatureBytes);
 
     return 'q-sign-algorithm=sha1'
@@ -304,6 +306,69 @@ class CosTransport implements SyncTransport {
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
+  /// COS 规范的 UrlEncode：在标准 URI 编码基础上额外编码 ! ' ( ) *
+  String _cosUrlEncode(String input) {
+    return Uri.encodeComponent(input)
+        .replaceAll('!', '%21')
+        .replaceAll("'", '%27')
+        .replaceAll('(', '%28')
+        .replaceAll(')', '%29')
+        .replaceAll('*', '%2A');
+  }
+
+  @override
+  Future<void> delete(String remotePath) async {
+    final path = _normalizePath(remotePath);
+    final method = 'DELETE';
+    final signHeaders = <String, String>{
+      'Host': Uri.parse(_baseUrl).host,
+    };
+    final auth = _buildAuth(method, path, signHeaders);
+    final requestHeaders = Map<String, String>.from(signHeaders)
+      ..['Authorization'] = auth;
+
+    try {
+      AppLogger.instance.i('[COS] 删除: $method $_baseUrl$path');
+      await _dio.delete(
+        '$_baseUrl$path',
+        options: Options(headers: requestHeaders),
+      );
+      AppLogger.instance.i('[COS] 删除成功');
+    } on DioException catch (e) {
+      _logDioError('删除', e);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<RemoteFileInfo>> listDetails(String prefix) async {
+    final normalizedPrefix = prefix.startsWith('/') ? prefix.substring(1) : prefix;
+    final query = 'prefix=${Uri.encodeComponent(normalizedPrefix)}';
+    final method = 'GET';
+    final signHeaders = <String, String>{
+      'Host': Uri.parse(_baseUrl).host,
+    };
+    final auth = _buildAuth(method, '/', signHeaders, queryParams: query);
+    final requestHeaders = Map<String, String>.from(signHeaders)
+      ..['Authorization'] = auth;
+
+    try {
+      AppLogger.instance.i('[COS] 列举详情: $method $_baseUrl/?$query');
+      final response = await _dio.get(
+        '$_baseUrl/?$query',
+        options: Options(
+          headers: requestHeaders,
+          responseType: ResponseType.plain,
+        ),
+      );
+      AppLogger.instance.i('[COS] 列举详情成功: ${response.statusCode}');
+      return _parseListDetailsResult(response.data as String);
+    } on DioException catch (e) {
+      _logDioError('列举详情', e);
+      return [];
+    }
+  }
+
   /// 解析 COS 列举结果 XML，提取 zip 文件名
   List<String> _parseListResult(String xml) {
     final keys = <String>[];
@@ -316,5 +381,24 @@ class CosTransport implements SyncTransport {
       }
     }
     return keys;
+  }
+
+  List<RemoteFileInfo> _parseListDetailsResult(String xml) {
+    final infos = <RemoteFileInfo>[];
+    final contentsRegex = RegExp(r'<Contents>(.*?)</Contents>', caseSensitive: false, dotAll: true);
+    for (final contentMatch in contentsRegex.allMatches(xml)) {
+      final content = contentMatch.group(1)!;
+      final keyMatch = RegExp(r'<Key>(.*?)</Key>', caseSensitive: false).firstMatch(content);
+      final sizeMatch = RegExp(r'<Size>(\d+)</Size>', caseSensitive: false).firstMatch(content);
+      final modifiedMatch = RegExp(r'<LastModified>(.*?)</LastModified>', caseSensitive: false).firstMatch(content);
+      if (keyMatch == null) continue;
+      final key = keyMatch.group(1)!.trim();
+      if (!key.endsWith('.zip')) continue;
+      final name = Uri.decodeComponent(key.split('/').last);
+      final size = int.tryParse(sizeMatch?.group(1) ?? '0') ?? 0;
+      final modifiedAt = DateTime.tryParse(modifiedMatch?.group(1) ?? '') ?? DateTime(1970);
+      infos.add(RemoteFileInfo(name: name, size: size, modifiedAt: modifiedAt));
+    }
+    return infos;
   }
 }

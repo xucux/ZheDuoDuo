@@ -285,9 +285,10 @@ class _AboutScreenState extends State<AboutScreen> {
   Future<void> _launchUrl(String url) async {
     if (url.isEmpty) return;
     final uri = Uri.tryParse(url);
-    if (uri != null && await canLaunchUrl(uri)) {
+    if (uri == null) return;
+    try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    } catch (_) {}
   }
 
   @override

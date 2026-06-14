@@ -28,6 +28,8 @@ class AiConfigs extends Table {
   RealColumn get temperature => real().withDefault(const Constant(0.7))();
   /// 最大输出 token 数
   IntColumn get maxTokens => integer().withDefault(const Constant(4096))();
+  /// 模型支持的能力（JSON 数组字符串，如 ["text","image","multimodal"]）
+  TextColumn get capabilities => text().withDefault(const Constant('[]'))();
   /// 是否为当前激活的配置
   IntColumn get isActive => integer().withDefault(const Constant(0))();
   /// 创建时间

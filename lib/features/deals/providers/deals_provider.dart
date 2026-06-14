@@ -9,17 +9,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/daos/deal_dao.dart';
+import '../../../core/database/daos/sync_dao.dart';
 import '../../../shared/theme/theme_provider.dart';
+
+final _syncDaoProvider = Provider<SyncDao>((ref) {
+  final db = ref.watch(databaseProvider);
+  return SyncDao(db);
+});
 
 final dealDaoProvider = Provider<DealDao>((ref) {
   final db = ref.watch(databaseProvider);
-  return DealDao(db);
+  final syncDao = ref.watch(_syncDaoProvider);
+  return DealDao(db, syncDao);
 });
 
 /// Deal list filters state
 class DealFilters {
   final String? platform;
   final String? category;
+  final String? tag;
   final String? searchQuery;
   final String sortBy;
   final bool ascending;
@@ -29,6 +37,7 @@ class DealFilters {
   const DealFilters({
     this.platform,
     this.category,
+    this.tag,
     this.searchQuery,
     this.sortBy = 'created_at',
     this.ascending = false,
@@ -36,10 +45,10 @@ class DealFilters {
     this.dateRange,
   });
 
-  /// 默认筛选条件（最近半年）
+  /// 默认筛选条件（最近一年）
   factory DealFilters.defaultFilters() {
     final end = DateTime.now();
-    final start = end.subtract(const Duration(days: 180));
+    final start = end.subtract(const Duration(days: 365));
     return DealFilters(
       dateRange: DateTimeRange(
         start: DateTime(start.year, start.month, start.day),
@@ -51,6 +60,7 @@ class DealFilters {
   DealFilters copyWith({
     String? platform,
     String? category,
+    String? tag,
     String? searchQuery,
     String? sortBy,
     bool? ascending,
@@ -58,12 +68,14 @@ class DealFilters {
     DateTimeRange? dateRange,
     bool clearPlatform = false,
     bool clearCategory = false,
+    bool clearTag = false,
     bool clearSearch = false,
     bool clearDateRange = false,
   }) {
     return DealFilters(
       platform: clearPlatform ? null : (platform ?? this.platform),
       category: clearCategory ? null : (category ?? this.category),
+      tag: clearTag ? null : (tag ?? this.tag),
       searchQuery: clearSearch ? null : (searchQuery ?? this.searchQuery),
       sortBy: sortBy ?? this.sortBy,
       ascending: ascending ?? this.ascending,
@@ -82,6 +94,10 @@ class DealFiltersNotifier extends StateNotifier<DealFilters> {
 
   void setCategory(String? category) {
     state = state.copyWith(category: category, clearCategory: category == null);
+  }
+
+  void setTag(String? tag) {
+    state = state.copyWith(tag: tag, clearTag: tag == null);
   }
 
   void setSearchQuery(String? query) {
@@ -117,6 +133,7 @@ final dealsProvider = StreamProvider<List<DealWithDetails>>((ref) {
   return dealDao.watchAllDeals(
     platform: filters.platform,
     category: filters.category,
+    tag: filters.tag,
     searchQuery: filters.searchQuery,
     sortBy: filters.sortBy,
     ascending: filters.ascending,

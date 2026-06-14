@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:restart_app/restart_app.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/image_compress.dart';
@@ -404,32 +405,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
 
       if (mounted) {
         if (importResult.success) {
-          ref.invalidate(backupListProvider);
-          ref.invalidate(backupStatsProvider);
-
-          _showSnackBar('导入成功，共 ${importResult.dealCount ?? '?'} 条记录');
-
-          // Restart app to reload database
-          if (mounted) {
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                title: const Text('导入完成'),
-                content: const Text('需要重启应用以加载导入的数据。'),
-                actions: [
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      // Force rebuild by popping back
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                    },
-                    child: const Text('确定'),
-                  ),
-                ],
-              ),
-            );
-          }
+          _showRestartDialog('导入成功，共 ${importResult.dealCount ?? '?'} 条记录');
         } else {
           _showSnackBar('导入失败: ${importResult.error}');
         }
@@ -514,28 +490,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
 
       if (mounted) {
         if (result.success) {
-          ref.invalidate(backupListProvider);
-          ref.invalidate(backupStatsProvider);
-
-          _showSnackBar('恢复成功，共 ${result.dealCount ?? '?'} 条记录');
-
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) => AlertDialog(
-              title: const Text('恢复完成'),
-              content: const Text('需要重启应用以加载恢复的数据。'),
-              actions: [
-                FilledButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  },
-                  child: const Text('确定'),
-                ),
-              ],
-            ),
-          );
+          _showRestartDialog('恢复成功，共 ${result.dealCount ?? '?'} 条记录');
         } else {
           _showSnackBar('恢复失败: ${result.error}');
         }
@@ -583,6 +538,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
               const SizedBox(height: 16),
               _buildInfoRow('文件名', backup.fileName),
               _buildInfoRow('大小', backup.fileSizeText),
+              _buildInfoRow('存储位置', backup.filePath, maxLines: 3),
               _buildInfoRow('创建时间', backup.dateText),
               if (backup.dealCount != null)
                 _buildInfoRow('记录数', '${backup.dealCount} 条'),
@@ -630,19 +586,25 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(String label, String value, {int maxLines = 1}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
             style: TextStyle(fontSize: 13, color: Colors.grey[600]),
           ),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),
@@ -701,6 +663,27 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('已清理 ${result.deletedCount} 个孤立图片，释放 ${ImageUtils.formatFileSize(result.freedBytes)}')),
+    );
+  }
+
+  void _showRestartDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('需要重启'),
+        content: Text('$message\n\n数据库已替换，请重启应用以恢复数据连接。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('稍后再说'),
+          ),
+          FilledButton(
+            onPressed: () => Restart.restartApp(),
+            child: const Text('立即重启'),
+          ),
+        ],
+      ),
     );
   }
 

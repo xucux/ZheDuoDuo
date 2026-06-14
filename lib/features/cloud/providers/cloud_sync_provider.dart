@@ -7,6 +7,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/backup/backup_service.dart';
+import '../../../core/database/daos/deal_dao.dart';
 import '../../../core/database/daos/sync_dao.dart';
 import '../../../core/sync/sync_service.dart';
 import '../../../shared/theme/theme_provider.dart';
@@ -23,9 +24,16 @@ final backupServiceProvider = Provider<BackupService>((ref) {
   return BackupService(db);
 });
 
+/// DealDao Provider（只读，用于同步服务应用远端变更）
+final syncDealDaoProvider = Provider<DealDao>((ref) {
+  final db = ref.watch(databaseProvider);
+  return DealDao(db);
+});
+
 /// 同步服务 Provider
 final syncServiceProvider = Provider<SyncService>((ref) {
   final backupService = ref.watch(backupServiceProvider);
   final syncDao = ref.watch(syncDaoProvider);
-  return SyncService(backupService, syncDao);
+  final dealDao = ref.watch(syncDealDaoProvider);
+  return SyncService(backupService, syncDao, dealDao);
 });

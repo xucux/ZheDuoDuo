@@ -11,33 +11,79 @@
 | 商品名称 | `title` | `product.title` | `title` / `name` | `title` |
 | 到手价 ✅ | `currentPrice` | `prices.discounted_price` | `currentPrice` / `price` / `现价` | `currentPrice` |
 | 原价 | `originalPrice` | `prices.original_price` | `originalPrice` / `原价` | `originalPrice` |
-| 展示价 | `currentDisplayPrice` | `prices.current_display_price` | `currentDisplayPrice` | `currentDisplayPrice` |
+| 展示价 | `currentDisplayPrice` | `prices.current_display_price` | `currentDisplayPrice` | `displayPrice` |
 | 货币 | `currency` | `prices.currency`（CNY→¥） | `currency` | `currency` |
 | 平台 | `platform` | `source.platform` | `platform` / `平台` | `platform` |
 | 物流 | `logistics` | `source.logistics` | `logistics` | `logistics` |
 | 分类 | `category` | `product.category` | `category` / `分类` | `category` |
 | 购买链接 | `link` | `source.link` | `link` / `url` / `链接` | `link` |
+| 折扣描述 | — | `discount` / `折扣` | `discount` | `discount` |
 | 标签 | `tagsStr`（逗号分隔） | 由 `promotions` 拆分 | `tags: []` | `tags[]` |
 | **促销权益** | **`promotionsStr`（每行一项）** | **`promotions: []`** | **`promotions: []`** | **`promotions[]`** |
 | 优惠券 | `coupons[]` | 由 `promotions` 拆分 | `coupons: []` | `coupons[]` |
-| 30天销量 | — | `sales.sold_30_days` | `sales` | `sales.sold30Days` |
-| 备注 | `note` | 自动拼接销量等 | `note` / `备注` | `note` |
+| 30天销量 | — | `sales.sold_30_days` | `sales` | `salesJson`（JSON 字符串） |
+| 历史最低价 | — | — | — | `isLowestPrice`（0/1） |
+| 备注 | `note` | `note` / `备注` | `note` | `note` |
 | 视觉类型 | `visualType` | `visual.type` | `visualType` | `visualType` |
-| 图片 URL | `imageUrl` | `visual.image_url` | `image_url` / `imageUrl` | 下载后 → `image` |
-| 本地图片 | `image`（base64） | — | — | `image`（原型）/ `imagePath`（正式版） |
+| 图片 URL | `imageUrl` | `visual.image_url` | `image_url` / `imageUrl` | 下载后 → `deal_images.image_path` |
 | ASCII 图 | `asciiArt` | `visual.ascii_art` | `ascii_art` / `asciiArt` | `asciiArt` |
 
 ✅ = 必填
 
+### 系统字段（自动填充，YAML 无需填写）
+
+| 字段 | 说明 |
+|------|------|
+| `id` | UUID，自动生成 |
+| `revision` | 版本号，每次更新 +1，用于云同步冲突检测 |
+| `deleted` | 软删除标记：0=正常，2=待确认删除 |
+| `deletedAt` | 进入待删除状态的时间 |
+| `deviceId` | 最后修改设备的 UUID |
+| `createdAt` | 创建时间 |
+| `updatedAt` | 更新时间 |
+
 ---
 
-## 二、促销权益（promotions）
+## 二、YAML 字段平铺详解
+
+| YAML 属性路径 | 中文含义 | 字段类型 | 示例 | 规则描述 |
+|--------------|---------|---------|------|---------|
+| `created_at` | 创建时间 | `string` | ISO8601 格式 | 优惠记录时间，可以从图片名称或者图片元数据中获取，最后获取不到则用当前时间 |
+| `product.title` | 商品名称 | `string` | `"Apple iPhone 15 Pro 12+512 白色"` | **必填**。商品的标题信息和规格信息 |
+| `product.category` | 商品分类 | `string` | `"手机"` | 默认 `"其他"`。尽量避免使用大类型，而是小类型例如：数码大类下的手机、微单相机、米家智能家居、路由器、游戏机、五金、充电宝、充电头、单反相机，无人机，户外相机，3D打印机，墨水屏阅读器，英伟达显卡，AMD显卡，CPU，电脑主板，机械硬盘，固态硬盘，内存条等等 |
+| `prices.discounted_price` | 实际购买到手价 | `number` | `5492.25` | **必填**。减去全部优惠后得到的价格，包括减去国家补贴 |
+| `prices.original_price` | 原价 | `number` | `8999` | 原价就是商品在市场上的标价，例如手机发布价格5999 |
+| `prices.current_display_price` | 展示价 | `number` | `7999` | 展示价格，可能等于原价，上架主动在原价的基础上，直接降价之后的价格，例如手机发布价格5999，促销时价格标为4999 |
+| `prices.currency` | 货币 | `string` | `"CNY"` | 默认 `"¥"`。`CNY`/`RMB`→`¥`，`USD`→`$`，`EUR`→`€`，`GBP`→`£`，`JPY`→`¥`，其余原样输出。回退根级 `currency` |
+| `source.platform` | 来源平台 | `string` | `"京东"` | 默认 `"其他"`。一般可以参考的有京东，抖音，拼多多，淘宝，天猫，唯品会，快手，闲鱼，转转等 |
+| `source.logistics` | 物流信息 | `string` | `"京东物流"` | 默认"包邮"，一般参考圆通，中通，顺丰，京东，韵达，极兔，中国邮政，免邮费等 |
+| `source.link` | 购买链接 | `string` | `"https://jd.com/..."` | 回退根级 `link` / `url` / `链接` |
+| `discount` | 折扣描述 | `string` | `"6.6折"` | 使用实际购买到手价和【原价or展示价格】自动计算 |
+| `sales.sold_30_days` | 30天销量 | `string` | `">1000"` | 结构化格式键名可为 `sold_30_days` 或 `sold30Days`；回退根级 `sales`（字符串） |
+| `visual.type` | 视觉类型 | `string` | `"ascii"` | 可选值 `none` / `image` / `ascii`。 |
+| `visual.image_url` | ~~图片 URL~~ | `string` | `"https://.../product.jpg"                    | 无需填写                                                     |
+| `visual.ascii_art` | ASCII 艺术图 | `string` | `"[ iPhone ]"` | 将商品主图转换成ascii图，转换成功则 `visualType = ascii`，若无法解析，则将`visual.type`置为none |
+| `promotions` | 促销权益列表，不能超过15个 | `string[]` | `["免费安装", "领券再减15%","180天只换不修","1年质保","包邮","大促直降861元"]` | 字符串数组，主要是商品的促销信息、折扣优惠、服务特点 |
+|`tags` | 自定义标签，不能超过4个，请勿重复语义化相近的词语 | `string[]` | `["退换免运费", "电脑主板"]` | 需要自行通过商品规格标题促销信息分析 商品标签和服务标签，商品标签需要比服务标签多一些（例如服务：国家补贴、三年质保、七天保价、店铺保修、180天只换不修、退换免运费）（例如商品类型：硬盘、内存条、显卡、CPU、电脑主板、机械硬盘、固态硬盘、3D打印、CMR技术、智能家居、米家、Mesh2.0、大电池、2K分辨率、摄影等等）；排除：促销、xxx人在抢、已抢购xxx等、剩xx件、限时秒杀、历史低价等时效性字眼、包邮、快递、顺丰等物流字眼、售后无忧、售后质保、售后保证等无意义字眼。|
+| `coupons[].count` | 券数量 | `number` | `2` | 默认 `1`。仅当显式提供 `coupons` 数组时有效 |
+| `coupons[].source` | 券来源 | `string` | `"平台满减"` | 默认 `"促销"` |
+| `coupons[].strength` | 优惠力度 | `string` | `"满3000减300"` | **必填子字段**。描述优惠具体内容 |
+| `coupons[].note` | 券备注 | `string` | `"自动领取"` | 可选，补充说明 |
+| `note` / `备注` | 备注 | `string` | `"需预约安装"` | 根级字段 |
+
+> coupons 优惠券提取规则： 1、直接从正文中获取优惠券信息 2、从 `promotions` 中提取（含关键词：券、减、折、直降、到手价、满、赠送、PLUS），每项生成 `ParsedCoupon(source="促销", strength=原文, count=1)`。数字字段支持字符串清洗（自动去除非数字字符后解析）
+
+
+
+---
+
+## 三、促销权益（promotions）
 
 ### 是否支持？
 
 **支持。** 促销权益贯穿 YAML 解析、表单编辑、详情展示全流程：
 
-1. YAML 中 `promotions` 列表原样写入 `promotions[]`
+1. YAML 中 `promotions` 列表原样写入 `deal_promotions[]`
 2. 同时按规则拆分为 `tags[]` 与 `coupons[]`（便于列表筛选与券管理）
 3. 表单「促销权益」文本框（每行一项）与 YAML 字段一一对应
 4. 详情页单独展示「促销权益」区块，保留电商原文
@@ -46,10 +92,10 @@
 
 | 类型 | 识别关键词 | 示例 |
 |------|-----------|------|
-| 标签 | 安装、质保、保价、包邮 | `免费安装`、`9年质保`、`保价618` |
+| 标签 | 安装、质保、保价、包邮、免邮、保修、保障 | `免费安装`、`9年质保`、`保价618` |
 | 优惠券 | 券、减、折、直降、到手价、满、赠送、PLUS | `领券再减15%`、`官方直降5%` |
 
-优惠券自动填充：`source`（优惠券/官方直降/满赠活动/促销）、`strength`（原文）、`count`（默认 1）。
+优惠券自动填充：`source`（促销）、`strength`（原文）、`count`（默认 1）。
 
 ### 表单填写示例
 
@@ -63,7 +109,7 @@ PLUS券后预计到手价1068元
 
 ---
 
-## 三、视觉内容（图片 / ASCII）
+## 四、视觉内容（图片 / ASCII）
 
 ### YAML 写法
 
@@ -90,19 +136,28 @@ ascii_art: |
 
 | 来源 | 行为 |
 |------|------|
-| YAML `image_url` | 解析后自动 **下载 → Canvas 压缩**（宽≤800，JPEG 70%）→ 填入 `form.image` |
+| YAML `image_url` | 解析后自动 **下载 → 压缩** → 保存为本地文件，写入 `deal_images` 表 |
 | 表单「图片 URL」+ 下载压缩 | 同上，手动触发 |
-| 表单本地选择 | FileReader → 压缩 → `form.image` |
+| 表单本地选择 | 选择图片 → 压缩（Android/iOS）/ 直接复制（Windows/Linux） → 保存到应用图片目录 |
 | YAML / 表单 `ascii_art` | 设置 `visualType: ascii`，写入 `asciiArt` |
 
-### 限制说明（原型）
+### 图片存储
 
-- 远程图片受浏览器 **CORS** 限制，部分电商 CDN 可能下载失败，需改用手动上传或正式版原生下载
-- 原型将压缩结果存为 **base64**；正式版见《数据持久化方案》— 存 `images/{id}.jpg` + `imagePath`
+- 图片压缩后保存到应用目录 `zheduoduo_data/images/{dealId}.jpg`
+- `deal_images` 表存储图片元数据：`image_path`（本地路径）、`thumb_path`（缩略图）、`width`、`height`、`quality`、`original_size`、`compressed_size`、`source_url`（原始 URL）
+- 切换 `visualType` 为 `none`/`ascii` 时，`deal_images` 标记为 `deleted=2`（待确认删除）；清理功能删除 `deleted != 0` 的记录及其本地图片文件
+- 删除折扣详情（逻辑删除）时，同步逻辑删除关联的 `deal_images`
+
+### 平台差异
+
+| 平台 | 图片压缩 | 说明 |
+|------|---------|------|
+| Android / iOS | 支持 | 使用 `flutter_image_compress` 按配置档位压缩 |
+| Windows / Linux | 不支持压缩 | 直接复制原图，`flutter_image_compress` 暂不支持桌面端 |
 
 ---
 
-## 四、推荐 YAML 完整示例
+## 五、推荐 YAML 完整示例
 
 ```yaml
 product:
@@ -123,6 +178,8 @@ prices:
   current_display_price: 1492.25
   currency: "CNY"
 
+discount: "6.6折"
+
 sales:
   sold_30_days: ">1000"
 
@@ -142,7 +199,7 @@ visual:
 
 ---
 
-## 五、简写兼容格式
+## 六、简写兼容格式
 
 ```yaml
 title: Apple iPhone 15 Pro 256GB
@@ -150,6 +207,7 @@ platform: 京东
 category: 数码
 originalPrice: 8999
 currentPrice: 7499
+discount: "8.3折"
 promotions:
   - 百亿补贴
   - 满3000减300
@@ -168,62 +226,148 @@ coupons:
 
 ---
 
-## 六、解析后 Deal 结构
+## 七、解析后 Deal 结构
 
 ```typescript
 interface Deal {
-  id: number | string;
-  title: string;
-  currentPrice: number;
-  originalPrice?: number;
-  currentDisplayPrice?: number;
-  currency: string;
-  platform: string;
-  logistics?: string;
-  category: string;
-  tags: string[];
-  promotions: string[];       // 促销权益原文列表
-  coupons: Coupon[];
-  sales?: { sold30Days: string };
-  note?: string;
-  link?: string;
+  id: string;                    // UUID，自动生成
+  title: string;                 // 商品名称
+  currentPrice: number;          // 到手价
+  originalPrice?: number;        // 原价
+  displayPrice?: number;         // 页面展示价
+  currency: string;              // 货币符号（默认 ¥）
+  platform: string;              // 来源平台
+  logistics?: string;            // 物流信息
+  category: string;              // 分类
+  tags: string[];                // 标签列表
+  promotions: string[];          // 促销权益原文列表
+  coupons: Coupon[];             // 优惠券列表
+  discount?: string;             // 折扣描述（如 "6.6折"）
+  salesJson?: string;            // 销量 JSON（如 '{"sold30Days":">1000"}'）
+  isLowestPrice: number;         // 0=否，1=是
+  note?: string;                 // 备注
+  link?: string;                 // 购买链接
   visualType: 'none' | 'image' | 'ascii';
-  image?: string;             // 原型 base64；正式版改为 imagePath
-  asciiArt?: string;
-  imageMeta?: {
-    originalSize?: string;
-    compressedSize?: string;
-    quality?: number;
-    sourceUrl?: string;
-    width?: number;
-    height?: number;
-  };
-  discount?: string;
-  createdAt: string;
+  asciiArt?: string;             // ASCII 艺术图
+  // 图片信息存储在 deal_images 表中，非 Deal 字段
+  createdAt: string;             // ISO8601
+  updatedAt: string;
+  revision: number;              // 版本号，每次更新 +1
+  deleted: number;               // 0=正常，2=待确认删除
+  deletedAt?: string;
+  deviceId?: string;             // 最后修改设备标识
 }
 
 interface Coupon {
-  count: number;
-  source: string;
-  strength: string;
-  note?: string;
+  id?: number;                   // 自增主键
+  count: number;                 // 券数量（默认 1）
+  source: string;                // 券来源
+  strength: string;              // 优惠力度
+  note?: string;                 // 备注
+}
+
+interface DealImage {
+  dealId: string;                // 与 deals.id 一对一
+  imagePath: string;             // 本地图片路径 images/{dealId}.jpg
+  thumbPath?: string;            // 缩略图路径
+  width?: number;                // 图片宽度
+  height?: number;               // 图片高度
+  quality?: number;              // JPEG 质量 0-100
+  originalSize?: number;         // 原始文件大小（字节）
+  compressedSize?: number;       // 压缩后大小（字节）
+  sourceUrl?: string;            // 原始下载 URL
+  updatedAt: string;
+  deleted: number;               // 0=正常，1=确认删除，2=待确认删除
 }
 ```
 
 ---
 
-## 七、使用流程
+## 八、数据库表映射
 
-1. 新建优惠 → 默认「YAML 解析」
-2. 粘贴 YAML 或点击「填入示例」
-3. 点击「解析并填充」→ 自动填充价格、促销权益、标签、优惠券、图片 URL（自动下载压缩）
-4. 切换到手动表单核对，可编辑促销权益、优惠券、ASCII、本地图片
-5. 保存
+### `deals` — 优惠主表
+
+```sql
+CREATE TABLE deals (
+  id                  TEXT PRIMARY KEY,
+  title               TEXT NOT NULL,
+  platform            TEXT NOT NULL DEFAULT '其他',
+  category            TEXT NOT NULL DEFAULT '其他',
+  current_price       REAL NOT NULL,
+  original_price      REAL,
+  display_price       REAL,
+  currency            TEXT NOT NULL DEFAULT '¥',
+  discount            TEXT,
+  logistics           TEXT,
+  link                TEXT,
+  note                TEXT,
+  visual_type         TEXT NOT NULL DEFAULT 'none',
+  ascii_art           TEXT,
+  sales_json          TEXT,                       -- {"sold30Days":">1000"}
+  is_lowest_price     INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  revision            INTEGER NOT NULL DEFAULT 1, -- 云同步版本控制
+  deleted             INTEGER NOT NULL DEFAULT 0,   -- 0=正常, 2=待确认删除
+  deleted_at          TEXT,
+  device_id           TEXT
+);
+```
+
+### `deal_images` — 图片元数据（一对一）
+
+```sql
+CREATE TABLE deal_images (
+  deal_id          TEXT PRIMARY KEY REFERENCES deals(id) ON DELETE CASCADE,
+  image_path       TEXT NOT NULL,              -- images/{deal_id}.jpg
+  thumb_path       TEXT,
+  width            INTEGER,
+  height           INTEGER,
+  quality          INTEGER,                    -- JPEG 质量 0-100
+  original_size    INTEGER,                    -- 字节
+  compressed_size  INTEGER,
+  source_url       TEXT,                       -- YAML image_url 来源
+  updated_at       TEXT NOT NULL,
+  deleted          INTEGER NOT NULL DEFAULT 0  -- 0=正常, 1=确认删除, 2=待确认删除
+);
+```
+
+### `deal_tags` / `deal_promotions` / `coupons`
+
+- `deal_tags(deal_id, tag)` — 标签多对多展开
+- `deal_promotions(deal_id, sort_order, text)` — 促销权益原文
+- `coupons(id, deal_id, sort_order, count, source, strength, note)` — 优惠券
 
 ---
 
-## 八、相关文档
+## 九、软删除与数据清理
+
+### 逻辑删除流程
+
+1. 用户删除折扣详情 → `deals.deleted = 2`（待确认删除）
+2. 同步关联的 `deal_images`：`deleted = 2`
+3. 恢复时同步恢复：`deleted = 0`
+4. 清理功能：物理删除 `deleted != 0` 的记录及其本地图片文件
+
+### 数据清理
+
+- `deal_images` 中 `deleted != 0` 的记录，其 `image_path` 对应的本地文件会被清理
+- 应用提供「清理已删除数据」功能释放存储空间
+
+---
+
+## 十、使用流程
+
+1. 新建优惠 → 默认「YAML 解析」
+2. 粘贴 YAML 或点击「填入示例」
+3. 点击「解析并填充」→ 自动填充价格、促销权益、标签、优惠券、图片 URL
+4. 切换到手动表单核对，可编辑促销权益、优惠券、ASCII、本地图片
+5. 保存 → 写入 `deals` + `deal_tags` + `deal_promotions` + `coupons` + `deal_images`
+
+---
+
+## 十一、相关文档
 
 - [数据持久化方案](./数据持久化方案.md) — SQLite 离线存储与云同步
-- [数据库表设计](./数据库表设计.md) — 表结构与字段映射
+- [数据库表设计](./数据库表设计.md) — 完整表结构与字段映射
 - [产品规划与开发建议](./产品规划与开发建议.md) — 功能路线图

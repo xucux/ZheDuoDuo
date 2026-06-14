@@ -5,6 +5,22 @@
 
 import 'dart:typed_data';
 
+/// 远端文件信息
+class RemoteFileInfo {
+  /// 文件名（不含路径）
+  final String name;
+  /// 文件大小（字节）
+  final int size;
+  /// 最后修改时间
+  final DateTime modifiedAt;
+
+  const RemoteFileInfo({
+    required this.name,
+    required this.size,
+    required this.modifiedAt,
+  });
+}
+
 /// 云同步传输层接口
 ///
 /// 所有云存储传输方式（WebDAV / COS / OSS）均需实现此接口。
@@ -24,6 +40,16 @@ abstract class SyncTransport {
   ///
   /// [prefix] 远端路径前缀，返回匹配的文件名列表。
   Future<List<String>> list(String prefix);
+
+  /// 列出远端指定前缀下的所有文件详细信息
+  ///
+  /// [prefix] 远端路径前缀，返回匹配的文件信息列表。
+  Future<List<RemoteFileInfo>> listDetails(String prefix);
+
+  /// 删除远端指定路径的文件
+  ///
+  /// [remotePath] 远端文件路径。
+  Future<void> delete(String remotePath);
 
   /// 测试连接是否可用
   ///

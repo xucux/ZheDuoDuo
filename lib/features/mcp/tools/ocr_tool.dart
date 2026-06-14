@@ -163,10 +163,11 @@ class OcrTool extends McpTool {
     switch (format) {
       case 'structured':
         final result = await _ocrService.recognizeStructured(path);
+        final resultMap = result.toMap();
         return {
           'success': true,
-          'text': result['fullText'],
-          'structured': result,
+          'text': result.fullText,
+          'structured': resultMap,
           'format': 'structured',
         };
       case 'markdown':

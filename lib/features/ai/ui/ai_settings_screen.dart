@@ -5,6 +5,8 @@
 // 所有数据保存至数据库 AiConfigs 表，API Key 存储在 Secrets 表。
 // 同一时间只能激活一个服务商。
 
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
@@ -37,6 +39,9 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
   late TextEditingController _maxTokensController;
   late TextEditingController _nameController;
   bool _apiKeyVisible = false;
+
+  /// 当前编辑配置的 capabilities
+  List<String> _capabilities = ['text'];
 
   @override
   void initState() {
@@ -84,6 +89,17 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
   /// 将数据库行转为 UI 模型
   AiProviderConfig _toAiProviderConfig(AiConfig row, String apiKey) {
     final preset = AiProviderPreset.findById(row.providerPreset);
+    List<String> caps;
+    try {
+      final decoded = jsonDecode(row.capabilities);
+      if (decoded is List) {
+        caps = decoded.whereType<String>().toList();
+      } else {
+        caps = preset?.capabilities ?? ['text'];
+      }
+    } catch (_) {
+      caps = preset?.capabilities ?? ['text'];
+    }
     return AiProviderConfig(
       id: row.id,
       name: preset?.name ?? row.providerPreset,
@@ -94,6 +110,7 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
       agentId: row.agentRole,
       temperature: row.temperature,
       maxTokens: row.maxTokens,
+      capabilities: caps,
       isActive: row.isActive == 1,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -118,6 +135,7 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
       _modelController.text = '';
       _maxTokensController.text = '';
       _nameController.text = '';
+      _capabilities = ['text'];
       return;
     }
     _apiKeyController.text = config.apiKey;
@@ -125,6 +143,7 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
     _modelController.text = config.model;
     _maxTokensController.text = config.maxTokens.toString();
     _nameController.text = config.name;
+    _capabilities = List<String>.from(config.capabilities);
   }
 
   /// 激活指定配置
@@ -189,6 +208,7 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
       agentPrompt: Value(AiAgent.findById(config.agentId)?.prompt ?? ''),
       temperature: Value(config.temperature),
       maxTokens: Value(int.tryParse(_maxTokensController.text) ?? config.maxTokens),
+      capabilities: Value(jsonEncode(_capabilities)),
       isActive: Value(config.isActive ? 1 : 0),
       updatedAt: Value(now),
       createdAt: Value(config.createdAt),
@@ -385,6 +405,38 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
           // ====== 当前服务商配置 ======
           if (editing != null) ...[
             _buildSectionHeader(context, 'AI 对话配置'),
+            // 预设快速填充
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: AiProviderPreset.builtIn
+                    .where((p) => p.id != 'custom')
+                    .map((preset) {
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _nameController.text = preset.name;
+                        _baseUrlController.text = preset.baseUrl;
+                        _modelController.text = preset.model;
+                        _capabilities = List<String>.from(preset.capabilities);
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AntdColors.primaryBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AntdColors.primary),
+                      ),
+                      child: Text(preset.name,
+                        style: const TextStyle(fontSize: 11, color: AntdColors.primary)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
             _buildSubHeader(context, '显示名称'),
             _buildNameField(context, theme),
             const SizedBox(height: 12),
@@ -407,6 +459,9 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
             const SizedBox(height: 12),
             _buildSubHeader(context, 'Max Tokens'),
             _buildMaxTokensField(context, theme),
+            const SizedBox(height: 12),
+            _buildSubHeader(context, '模型能力'),
+            _buildCapabilitiesEditor(context, theme),
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -666,6 +721,7 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
     var agentId = 'default';
     var temperature = 0.7;
     var showApiKey = false;
+    var sheetCapabilities = <String>['text'];
 
     showModalBottomSheet(
       context: context,
@@ -718,6 +774,7 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
                               baseUrlCtrl.text = preset.baseUrl;
                               modelCtrl.text = preset.model;
                               nameCtrl.text = preset.name;
+                              sheetCapabilities = List<String>.from(preset.capabilities);
                             });
                           },
                           child: Container(
@@ -894,6 +951,59 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
                         isDense: true,
                       ),
                     ),
+                    const SizedBox(height: 12),
+
+                    // Capabilities
+                    Text('模型能力', style: TextStyle(fontSize: 12,
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8, runSpacing: 8,
+                      children: _allCapabilities.map((cap) {
+                        final isSelected = sheetCapabilities.contains(cap);
+                        return GestureDetector(
+                          onTap: () {
+                            setSheetState(() {
+                              if (isSelected) {
+                                if (sheetCapabilities.length > 1) {
+                                  sheetCapabilities.remove(cap);
+                                }
+                              } else {
+                                sheetCapabilities.add(cap);
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AntdColors.primary : Theme.of(ctx).colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? AntdColors.primary : Theme.of(ctx).colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isSelected)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 4),
+                                    child: Icon(Icons.check, size: 12, color: Colors.white),
+                                  ),
+                                Text(
+                                  _capabilityLabel(cap),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                    color: isSelected ? Colors.white : Theme.of(ctx).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                     const SizedBox(height: 20),
 
                     SizedBox(
@@ -922,6 +1032,7 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
                             agentPrompt: Value(AiAgent.findById(agentId)?.prompt ?? ''),
                             temperature: Value(temperature),
                             maxTokens: Value(int.tryParse(maxTokensCtrl.text) ?? 4096),
+                            capabilities: Value(jsonEncode(sheetCapabilities)),
                             isActive: Value(0),
                             updatedAt: Value(now),
                             createdAt: Value(now),
@@ -1173,6 +1284,84 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
           hintText: '4096',
           prefixIcon: Icon(Icons.data_array, size: 18),
         ),
+      ),
+    );
+  }
+
+  // ==================== Capabilities 编辑器 ====================
+
+  static const List<String> _allCapabilities = [
+    'text', 'image', 'multimodal', 'reasoning', 'code',
+    'vision', 'audio', 'video', 'file', 'tool', 'search',
+  ];
+
+  static String _capabilityLabel(String cap) {
+    return switch (cap) {
+      'text' => '文本',
+      'image' => '图片',
+      'multimodal' => '多模态',
+      'reasoning' => '推理',
+      'code' => '代码',
+      'vision' => '视觉',
+      'audio' => '音频',
+      'video' => '视频',
+      'file' => '文件',
+      'tool' => '工具调用',
+      'search' => '联网搜索',
+      _ => cap,
+    };
+  }
+
+  Widget _buildCapabilitiesEditor(BuildContext context, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _allCapabilities.map((cap) {
+          final isSelected = _capabilities.contains(cap);
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                if (isSelected) {
+                  if (_capabilities.length > 1) {
+                    _capabilities.remove(cap);
+                  }
+                } else {
+                  _capabilities.add(cap);
+                }
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: isSelected ? AntdColors.primary : theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? AntdColors.primary : theme.colorScheme.outlineVariant,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isSelected)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: Icon(Icons.check, size: 12, color: Colors.white),
+                    ),
+                  Text(
+                    _capabilityLabel(cap),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isSelected ? Colors.white : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

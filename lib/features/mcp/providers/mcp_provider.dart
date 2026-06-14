@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/daos/settings_dao.dart';
 import '../../../shared/theme/theme_provider.dart';
+import '../../local_server/services/local_server_service.dart';
 import '../../ocr/services/ocr_service.dart';
 import '../models/mcp_tool.dart';
 import '../services/mcp_server_service.dart';
@@ -30,6 +31,8 @@ final mcpServerServiceProvider = Provider<McpServerService>((ref) {
 });
 
 /// MCP 启用状态 Provider
+///
+/// 从设置中读取/写入 MCP 启用状态。
 final mcpEnabledProvider = StateNotifierProvider<McpEnabledNotifier, bool>((ref) {
   final settingsDao = ref.watch(settingsDaoProvider);
   return McpEnabledNotifier(settingsDao);
@@ -43,27 +46,16 @@ final mcpToolSettingsProvider = StateNotifierProvider<McpToolSettingsNotifier, L
 
 /// MCP 服务器运行状态 Provider
 ///
-/// 自动根据启用状态启动/停止服务器，返回服务器地址和工具列表。
+/// 返回 MCP 在本地服务上的运行状态和端点地址。
 final mcpServerStatusProvider = FutureProvider.autoDispose<McpServerInfo>((ref) async {
   final enabled = ref.watch(mcpEnabledProvider);
-  final service = ref.watch(mcpServerServiceProvider);
   final toolConfigs = ref.watch(mcpToolSettingsProvider);
-
-  if (!enabled) {
-    if (service.isRunning) {
-      await service.stop();
-    }
-    return McpServerInfo(running: false, port: 0, address: '');
-  }
-
-  if (!service.isRunning) {
-    await service.start();
-  }
+  final localServer = LocalServerService.instance;
 
   return McpServerInfo(
-    running: service.isRunning,
-    port: service.port,
-    address: service.address,
+    running: enabled && localServer.isRunning,
+    port: localServer.port,
+    address: '${localServer.address}/mcp',
     tools: toolConfigs.where((t) => t.enabled).map((t) => t.toJson()).toList(),
   );
 });

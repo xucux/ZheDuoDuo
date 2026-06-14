@@ -42,6 +42,8 @@ class ParsedDeal {
   final String? imageUrl;
   /// 销量信息
   final String? sales;
+  /// 创建时间（ISO8601 字符串，可选）
+  final DateTime? createdAt;
   /// 标签列表
   final List<String> tags;
   /// 促销权益列表
@@ -66,6 +68,7 @@ class ParsedDeal {
     this.asciiArt,
     this.imageUrl,
     this.sales,
+    this.createdAt,
     this.tags = const [],
     this.promotions = const [],
     this.coupons = const [],
@@ -120,6 +123,7 @@ class YamlParser {
     final note = _extractString(map, ['note', '备注']);
     final discount = _extractString(map, ['discount', '折扣']);
     final sales = _extractSales(map);
+    final createdAt = _extractCreatedAt(map);
 
     // Visual
     final visualType = _extractVisualType(map);
@@ -148,6 +152,7 @@ class YamlParser {
       asciiArt: asciiArt,
       imageUrl: imageUrl,
       sales: sales,
+      createdAt: createdAt,
       tags: tags,
       promotions: promotions,
       coupons: coupons,
@@ -271,6 +276,12 @@ class YamlParser {
       return s['sold_30_days']?.toString() ?? s['sold30Days']?.toString();
     }
     return map['sales']?.toString();
+  }
+
+  static DateTime? _extractCreatedAt(Map<String, dynamic> map) {
+    final raw = _extractString(map, ['created_at', 'createdAt']);
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
   }
 
   static String _extractVisualType(Map<String, dynamic> map) {

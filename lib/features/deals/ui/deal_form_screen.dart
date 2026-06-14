@@ -9,6 +9,7 @@ import '../../../core/database/app_database.dart';
 import '../../../core/database/daos/deal_dao.dart';
 import '../../../core/utils/yaml_parser.dart';
 import '../../../core/utils/image_compress.dart';
+import '../../../core/utils/platform_utils.dart';
 import '../../../shared/theme/antd_colors.dart';
 import '../../../shared/theme/theme_provider.dart';
 import '../providers/deals_provider.dart';
@@ -73,6 +74,7 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
   bool _isLoading = false;
   bool _isEditing = false;
   bool _isLowestPrice = false;
+  DateTime? _createdAt;
 
   // 图片压缩结果信息
   int? _imageOriginalSize;
@@ -119,6 +121,7 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
       _asciiArt = dw.deal.asciiArt;
       _currency = dw.deal.currency;
       _isLowestPrice = dw.deal.isLowestPrice == 1;
+      _createdAt = dw.deal.createdAt;
 
       // 加载图片压缩信息
       _imageOriginalSize = dw.image?.originalSize;
@@ -560,8 +563,11 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
           Row(
             children: [
               Expanded(child: OutlinedButton.icon(onPressed: () => _pickImage(ImageSource.gallery), icon: const Icon(Icons.photo_library, size: 16), label: const Text('相册'))),
-              const SizedBox(width: 12),
-              Expanded(child: OutlinedButton.icon(onPressed: () => _pickImage(ImageSource.camera), icon: const Icon(Icons.camera_alt, size: 16), label: const Text('拍照'))),
+              // 桌面端隐藏拍照按钮（无摄像头支持）
+              if (PlatformUtils.isCameraSupported) ...[
+                const SizedBox(width: 12),
+                Expanded(child: OutlinedButton.icon(onPressed: () => _pickImage(ImageSource.camera), icon: const Icon(Icons.camera_alt, size: 16), label: const Text('拍照'))),
+              ],
             ],
           ),
         ],
@@ -660,6 +666,7 @@ source:
         _visualType = parsed.visualType;
         _asciiArt = parsed.asciiArt;
         _currency = parsed.currency;
+        _createdAt = parsed.createdAt;
 
         // 解析优惠券
         _coupons.clear();
@@ -682,13 +689,13 @@ source:
 
   // ===== Image =====
   Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final xfile = await picker.pickImage(source: source, maxWidth: 1600);
-    if (xfile == null) return;
+    // 使用平台适配工具选择图片（桌面端自动回退到文件选择器）
+    final path = await PlatformUtils.pickImage(source);
+    if (path == null) return;
 
     final compressDao = ref.read(imageCompressSettingsDaoProvider);
     final result = await ImageUtils.prepareImage(
-      File(xfile.path),
+      File(path),
       compressDao: compressDao,
     );
     if (result != null) {
@@ -754,6 +761,8 @@ source:
         discount = '${(currentPrice / originalPrice * 10).toStringAsFixed(1)}折';
       }
 
+      final createdAt = _createdAt ?? now;
+
       final deal = Deal(
         id: id,
         title: _titleController.text.trim(),
@@ -770,7 +779,7 @@ source:
         visualType: _visualType,
         asciiArt: _visualType == 'ascii' ? _asciiArt : null,
         isLowestPrice: _isLowestPrice ? 1 : 0,
-        createdAt: now,
+        createdAt: createdAt,
         updatedAt: now,
         revision: 1,
         deleted: 0,

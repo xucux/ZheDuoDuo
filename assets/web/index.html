@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>折扣管理后台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+  [v-cloak] { display: none; }
+  .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+  .fade-enter-from, .fade-leave-to { opacity: 0; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div id="app" v-cloak class="min-h-screen">
+  <!-- 登录遮罩 -->
+  <div v-if="!authenticated" class="fixed inset-0 bg-slate-50/95 backdrop-blur flex items-center justify-center z-50">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-100">
+      <div class="text-center mb-6">
+        <div class="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        </div>
+        <h2 class="text-xl font-bold text-slate-900">请输入访问凭证</h2>
+        <p class="text-sm text-slate-400 mt-1.5">需要 Bearer Token 才能访问管理后台</p>
+      </div>
+      <input v-model="inputToken" type="password" placeholder="输入 Token..."
+        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent mb-4 bg-slate-50/50"
+        @keyup.enter="doAuth">
+      <button @click="doAuth"
+        class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-2.5 rounded-xl transition-all shadow-sm hover:shadow">
+        验证并进入
+      </button>
+      <p v-if="authError" class="text-red-500 text-sm text-center mt-3">{{ authError }}</p>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div v-else>
+    <!-- 顶部栏 -->
+    <header class="bg-white/80 backdrop-blur border-b border-slate-100 sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm">折</div>
+          <h1 class="font-bold text-lg text-slate-800">折扣管理后台</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg font-mono">{{ apiBase }}</span>
+          <button @click="logout" class="text-sm text-slate-500 hover:text-red-500 transition-colors px-2 py-1 rounded-lg hover:bg-red-50">退出</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <!-- 统计卡片 -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+          <p class="text-sm text-slate-400 mb-1">总折扣数</p>
+          <p class="text-3xl font-bold text-slate-800">{{ deals.length }}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+          <p class="text-sm text-slate-400 mb-1">平台数</p>
+          <p class="text-3xl font-bold text-slate-800">{{ platforms.length }}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+          <p class="text-sm text-slate-400 mb-1">分类数</p>
+          <p class="text-3xl font-bold text-slate-800">{{ categories.length }}</p>
+        </div>
+      </div>
+
+      <!-- 工具栏 -->
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm mb-4">
+        <div class="p-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          <div class="flex flex-wrap gap-2 w-full sm:w-auto items-center">
+            <input v-model="searchQuery" placeholder="搜索标题/平台/分类..."
+              class="px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 w-full sm:w-48 bg-slate-50/50">
+            <select v-model="filterPlatform" class="px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+              <option value="">全部平台</option>
+              <option v-for="p in platforms" :key="p" :value="p">{{ p }}</option>
+            </select>
+            <input v-model="startTime" type="date" title="开始时间"
+              class="px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50 text-slate-500">
+            <input v-model="endTime" type="date" title="结束时间"
+              class="px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50 text-slate-500">
+            <button @click="changePage(1)" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm rounded-xl transition-colors">查询</button>
+          </div>
+          <div class="flex gap-2">
+            <button @click="showBatchAdd = true" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors">批量新增</button>
+            <button @click="openAddModal" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-xl transition-all shadow-sm hover:shadow">+ 新增折扣</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 列表 -->
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+              <tr>
+                <th class="px-4 py-3 w-10"><input type="checkbox" v-model="selectAll" @change="toggleSelectAll" class="rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"></th>
+                <th class="px-4 py-3">标题</th>
+                <th class="px-4 py-3">平台</th>
+                <th class="px-4 py-3">分类</th>
+                <th class="px-4 py-3">现价</th>
+                <th class="px-4 py-3">原价</th>
+                <th class="px-4 py-3">折扣</th>
+                <th class="px-4 py-3 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="deal in filteredDeals" :key="deal.id" class="border-b border-slate-50 hover:bg-emerald-50/30 transition-colors">
+                <td class="px-4 py-3"><input type="checkbox" v-model="selectedIds" :value="deal.id" class="rounded border-slate-300 text-emerald-500 focus:ring-emerald-400"></td>
+                <td class="px-4 py-3 font-medium text-slate-800 max-w-xs truncate" :title="deal.title">{{ deal.title }}</td>
+                <td class="px-4 py-3"><span class="px-2.5 py-0.5 bg-sky-50 text-sky-600 rounded-lg text-xs font-medium">{{ deal.platform }}</span></td>
+                <td class="px-4 py-3"><span class="px-2.5 py-0.5 bg-violet-50 text-violet-600 rounded-lg text-xs font-medium">{{ deal.category }}</span></td>
+                <td class="px-4 py-3 font-semibold text-emerald-600">{{ deal.currency }}{{ deal.currentPrice }}</td>
+                <td class="px-4 py-3 text-slate-400 line-through">{{ deal.originalPrice ? deal.currency + deal.originalPrice : '-' }}</td>
+                <td class="px-4 py-3 text-amber-500 font-medium">{{ deal.discount || '-' }}</td>
+                <td class="px-4 py-3 text-right">
+                  <button @click="editDeal(deal)" class="text-sky-600 hover:text-sky-700 text-xs font-medium mr-3 px-2 py-1 rounded-lg hover:bg-sky-50 transition-colors">编辑</button>
+                  <button @click="deleteDeal(deal.id)" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">删除</button>
+                </td>
+              </tr>
+              <tr v-if="filteredDeals.length === 0">
+                <td colspan="8" class="px-4 py-12 text-center text-slate-400">暂无数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- 分页 -->
+        <div class="px-4 py-3 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="text-sm text-slate-500">
+            共 <span class="font-semibold text-slate-800">{{ pagination.total }}</span> 条，第 <span class="font-semibold text-slate-800">{{ pagination.page }}</span> / <span class="font-semibold text-slate-800">{{ pagination.pages }}</span> 页
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button @click="changePage(page - 1)" :disabled="page <= 1" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">上一页</button>
+            <button v-for="p in pageNumbers" :key="p" @click="changePage(p)"
+              :class="['px-3 py-1.5 rounded-lg text-sm font-medium transition-colors', p === page ? 'bg-emerald-500 text-white' : 'border border-slate-200 hover:bg-slate-50 text-slate-700']">
+              {{ p }}
+            </button>
+            <button @click="changePage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">下一页</button>
+            <select v-model="pageSize" @change="changePage(1)" class="ml-2 px-2 py-1.5 rounded-lg border border-slate-200 text-sm bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+              <option :value="10">10条/页</option>
+              <option :value="20">20条/页</option>
+              <option :value="50">50条/页</option>
+            </select>
+          </div>
+        </div>
+        <!-- 批量操作栏 -->
+        <div v-if="selectedIds.length > 0" class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+          <span class="text-sm text-slate-600">已选择 <span class="font-semibold text-slate-800">{{ selectedIds.length }}</span> 项</span>
+          <button @click="batchDelete" class="px-3 py-1.5 bg-red-50 text-red-600 text-sm font-medium rounded-xl hover:bg-red-100 transition-colors">批量删除</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 新增/编辑弹窗 -->
+  <div v-if="showModal" class="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
+        <h3 class="text-lg font-bold text-slate-800">{{ editingDeal ? '编辑折扣' : '新增折扣' }}</h3>
+        <button @click="showModal = false" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">标题 <span class="text-red-500">*</span></label>
+          <input v-model="form.title" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">平台</label>
+            <input v-model="form.platform" placeholder="其他" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">分类</label>
+            <input v-model="form.category" placeholder="其他" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+          </div>
+        </div>
+        <div class="grid grid-cols-4 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">现价 <span class="text-red-500">*</span></label>
+            <input v-model.number="form.currentPrice" type="number" step="0.01" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">原价</label>
+            <input v-model.number="form.originalPrice" type="number" step="0.01" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">展示价</label>
+            <input v-model.number="form.displayPrice" type="number" step="0.01" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">货币</label>
+            <select v-model="form.currency" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+              <option value="&yen;">&yen; CNY</option>
+              <option value="\$">\$ USD</option>
+              <option value="&euro;">&euro; EUR</option>
+              <option value="&pound;">&pound; GBP</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">折扣</label>
+            <input v-model="form.discount" placeholder="如 8折" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">物流</label>
+            <input v-model="form.logistics" placeholder="包邮" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">链接</label>
+          <input v-model="form.link" placeholder="https://..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">促销权益（每行一项）</label>
+          <textarea v-model="promotionsText" rows="3" placeholder="免费安装\n领券再减15%\n180天只换不修" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50 resize-none text-sm font-mono"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">标签（逗号分隔）</label>
+          <input v-model="tagsText" placeholder="百亿补贴, 限时" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-slate-700">优惠券</label>
+            <button @click="addCoupon" class="text-xs text-emerald-600 hover:text-emerald-700 font-medium px-2 py-1 rounded-lg hover:bg-emerald-50 transition-colors">+ 添加</button>
+          </div>
+          <div v-for="(c, i) in form.coupons" :key="i" class="grid grid-cols-12 gap-2 mb-2 items-center">
+            <input v-model="c.source" placeholder="来源" class="col-span-3 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+            <input v-model="c.strength" placeholder="优惠力度" class="col-span-4 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+            <input v-model.number="c.count" type="number" placeholder="数量" class="col-span-2 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+            <input v-model="c.note" placeholder="备注" class="col-span-2 px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+            <button @click="removeCoupon(i)" class="col-span-1 text-slate-400 hover:text-red-500 p-1 rounded-lg hover:bg-red-50 transition-colors flex justify-center">×</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">视觉类型</label>
+            <select v-model="form.visualType" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50">
+              <option value="none">无</option>
+              <option value="image">图片</option>
+              <option value="ascii">ASCII</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">30天销量 (JSON)</label>
+            <input v-model="form.salesJson" placeholder='{"sold_30_days":">1000"}' class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50 text-sm font-mono">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">ASCII 艺术图</label>
+          <textarea v-model="form.asciiArt" rows="2" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50 resize-none text-sm font-mono"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">备注</label>
+          <textarea v-model="form.note" rows="2" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50/50 resize-none"></textarea>
+        </div>
+      </div>
+      <div class="p-6 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white rounded-b-2xl">
+        <button @click="showModal = false" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl text-sm font-medium transition-colors">取消</button>
+        <button @click="saveDeal" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量新增弹窗 -->
+  <div v-if="showBatchAdd" class="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl">
+        <h3 class="text-lg font-bold text-slate-800">批量新增折扣</h3>
+        <button @click="showBatchAdd = false" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-slate-500 mb-3">JSON 数组格式，每个对象对应一条折扣：</p>
+        <code class="block bg-slate-50 p-3.5 rounded-xl text-xs text-slate-600 mb-4 font-mono border border-slate-100">{"title":"商品名","platform":"淘宝","category":"数码","currentPrice":99,"originalPrice":199}</code>
+        <textarea v-model="batchJson" rows="12" placeholder='[{...}, {...}]' class="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono text-sm bg-slate-50/50"></textarea>
+      </div>
+      <div class="p-6 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 bg-white rounded-b-2xl">
+        <button @click="showBatchAdd = false" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl text-sm font-medium transition-colors">取消</button>
+        <button @click="saveBatch" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow">批量保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+createApp({
+  setup() {
+    const apiBase = window.location.origin;
+    const token = ref(localStorage.getItem('local_server_token') || '');
+    const authenticated = ref(!!token.value);
+    const inputToken = ref('');
+    const authError = ref('');
+
+    const deals = ref([]);
+    const platforms = ref([]);
+    const categories = ref([]);
+    const searchQuery = ref('');
+    const filterPlatform = ref('');
+    const startTime = ref('');
+    const endTime = ref('');
+    const selectedIds = ref([]);
+    const selectAll = ref(false);
+
+    const page = ref(1);
+    const pageSize = ref(20);
+    const pagination = ref({ page: 1, pageSize: 20, total: 0, pages: 0 });
+
+    const showModal = ref(false);
+    const showBatchAdd = ref(false);
+    const editingDeal = ref(null);
+    const batchJson = ref('');
+    const form = ref({
+      title: '', platform: '', category: '', currentPrice: 0, originalPrice: null, displayPrice: null,
+      currency: '¥', discount: '', logistics: '', link: '', note: '', visualType: 'none',
+      asciiArt: '', salesJson: '', coupons: []
+    });
+    const promotionsText = ref('');
+    const tagsText = ref('');
+
+    const headers = () => ({ 'Authorization': 'Bearer ' + token.value, 'Content-Type': 'application/json' });
+
+    async function doAuth() {
+      authError.value = '';
+      try {
+        const res = await fetch(apiBase + '/api/deals/list?page=1&pageSize=1', { headers: { 'Authorization': 'Bearer ' + inputToken.value } });
+        if (res.status === 401) throw new Error('凭证无效');
+        token.value = inputToken.value;
+        localStorage.setItem('local_server_token', token.value);
+        authenticated.value = true;
+        loadDeals();
+      } catch (e) {
+        authError.value = '凭证验证失败：' + e.message;
+      }
+    }
+
+    function logout() {
+      token.value = '';
+      localStorage.removeItem('local_server_token');
+      authenticated.value = false;
+      inputToken.value = '';
+    }
+
+    async function loadDeals() {
+      try {
+        const qs = new URLSearchParams();
+        qs.set('page', String(page.value));
+        qs.set('pageSize', String(pageSize.value));
+        if (searchQuery.value) qs.set('search', searchQuery.value);
+        if (filterPlatform.value) qs.set('platform', filterPlatform.value);
+        if (startTime.value) qs.set('startTime', startTime.value);
+        if (endTime.value) qs.set('endTime', endTime.value);
+        const res = await fetch(apiBase + '/api/deals/list?' + qs.toString(), { headers: headers() });
+        const json = await res.json();
+        deals.value = json.data || [];
+        pagination.value = json.pagination || { page: 1, pageSize: 20, total: 0, pages: 0 };
+        const pSet = new Set(), cSet = new Set();
+        deals.value.forEach(d => { if (d.platform) pSet.add(d.platform); if (d.category) cSet.add(d.category); });
+        platforms.value = Array.from(pSet);
+        categories.value = Array.from(cSet);
+        selectedIds.value = [];
+        selectAll.value = false;
+      } catch (e) { console.error(e); }
+    }
+
+    function changePage(p) {
+      if (p < 1 || p > pagination.value.pages) return;
+      page.value = p;
+      loadDeals();
+    }
+
+    const pageNumbers = computed(() => {
+      const max = pagination.value.pages || 1;
+      const curr = page.value;
+      const arr = [];
+      const start = Math.max(1, curr - 2);
+      const end = Math.min(max, curr + 2);
+      for (let i = start; i <= end; i++) arr.push(i);
+      return arr;
+    });
+
+    const filteredDeals = computed(() => deals.value);
+
+    function toggleSelectAll() {
+      selectedIds.value = selectAll.value ? filteredDeals.value.map(d => d.id) : [];
+    }
+
+    function openAddModal() {
+      editingDeal.value = null;
+      form.value = {
+        title: '', platform: '', category: '', currentPrice: 0, originalPrice: null, displayPrice: null,
+        currency: '¥', discount: '', logistics: '', link: '', note: '', visualType: 'none',
+        asciiArt: '', salesJson: '', coupons: []
+      };
+      promotionsText.value = '';
+      tagsText.value = '';
+      showModal.value = true;
+    }
+
+    function editDeal(deal) {
+      editingDeal.value = deal;
+      form.value = {
+        title: deal.title || '', platform: deal.platform || '', category: deal.category || '',
+        currentPrice: deal.currentPrice ?? 0, originalPrice: deal.originalPrice ?? null, displayPrice: deal.displayPrice ?? null,
+        currency: deal.currency || '¥', discount: deal.discount || '', logistics: deal.logistics || '',
+        link: deal.link || '', note: deal.note || '', visualType: deal.visualType || 'none',
+        asciiArt: deal.asciiArt || '', salesJson: deal.salesJson || '',
+        coupons: (deal.coupons || []).map(c => ({ ...c }))
+      };
+      promotionsText.value = (deal.promotions || []).join('\n');
+      tagsText.value = (deal.tags || []).join(', ');
+      showModal.value = true;
+    }
+
+    function addCoupon() {
+      form.value.coupons.push({ source: '促销', strength: '', count: 1, note: '' });
+    }
+
+    function removeCoupon(index) {
+      form.value.coupons.splice(index, 1);
+    }
+
+    async function saveDeal() {
+      const payload = {
+        ...form.value,
+        promotions: promotionsText.value.split('\n').map(s => s.trim()).filter(s => s),
+        tags: tagsText.value.split(/[,，]/).map(s => s.trim()).filter(s => s)
+      };
+      // 过滤掉空优惠券
+      payload.coupons = (payload.coupons || []).filter(c => c.strength && c.strength.trim());
+      try {
+        if (editingDeal.value) {
+          await fetch(apiBase + '/api/deals/update/' + editingDeal.value.id, { method: 'POST', headers: headers(), body: JSON.stringify(payload) });
+        } else {
+          await fetch(apiBase + '/api/deals/create', { method: 'POST', headers: headers(), body: JSON.stringify(payload) });
+        }
+        showModal.value = false;
+        loadDeals();
+      } catch (e) { alert('保存失败: ' + e.message); }
+    }
+
+    async function deleteDeal(id) {
+      if (!confirm('确定删除该折扣吗？')) return;
+      try {
+        await fetch(apiBase + '/api/deals/delete/' + id, { method: 'POST', headers: headers() });
+        loadDeals();
+      } catch (e) { alert('删除失败: ' + e.message); }
+    }
+
+    async function batchDelete() {
+      if (!confirm('确定批量删除选中的 ' + selectedIds.value.length + ' 项吗？')) return;
+      try {
+        await fetch(apiBase + '/api/deals/batchDelete', { method: 'POST', headers: headers(), body: JSON.stringify({ ids: selectedIds.value }) });
+        selectedIds.value = [];
+        selectAll.value = false;
+        loadDeals();
+      } catch (e) { alert('批量删除失败: ' + e.message); }
+    }
+
+    async function saveBatch() {
+      try {
+        const list = JSON.parse(batchJson.value);
+        await fetch(apiBase + '/api/deals/batchCreate', { method: 'POST', headers: headers(), body: JSON.stringify(list) });
+        showBatchAdd.value = false;
+        batchJson.value = '';
+        loadDeals();
+      } catch (e) { alert('批量保存失败: ' + e.message); }
+    }
+
+    onMounted(() => {
+      if (authenticated.value) loadDeals();
+    });
+
+    return {
+      apiBase, authenticated, inputToken, authError, doAuth, logout,
+      deals, platforms, categories, searchQuery, filterPlatform, startTime, endTime, selectedIds, selectAll, toggleSelectAll,
+      page, pageSize, pagination, changePage, pageNumbers,
+      filteredDeals, showModal, showBatchAdd, editingDeal, batchJson, form, promotionsText, tagsText,
+      openAddModal, editDeal, saveDeal, deleteDeal, batchDelete, saveBatch, addCoupon, removeCoupon
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

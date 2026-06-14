@@ -101,21 +101,55 @@ dart run build_runner build --delete-conflicting-outputs
 
 # 3. 启动开发
 flutter run
+```
 
-# 4. 构建 APK
+### 构建发布包
+
+```bash
+# Android APK
 flutter build apk --release
 
-# 5. 构建 iOS
+# iOS
 flutter build ios --release
+
+# Windows
+flutter build windows --release
 ```
 
-```
-flutter clean && dart run build_runner build --delete-conflicting-outputs && flutter run
+### Icon 图标配置与编译
 
-flutter clean
-dart run build_runner build --delete-conflicting-outputs
-flutter run
+项目使用 `flutter_launcher_icons` 插件自动生成各平台图标，配置在 `pubspec.yaml` 中：
+
+```yaml
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
 ```
+
+**生成 Android / iOS 图标：**
+
+```bash
+dart run flutter_launcher_icons
+```
+
+该命令会自动根据 `assets/icon/app_icon.png` 生成各尺寸图标到对应平台目录。
+
+**Windows 图标：**
+
+Windows 平台使用 ICO 格式图标，位于 `windows/runner/resources/app_icon.ico`。需要手动处理：
+
+1. 准备一张 256x256 以上的 PNG 图标（如 `assets/icon/app_icon.png`）
+2. 使用在线工具（如 [ConvertICO](https://convertio.co/png-ico/)）或 ImageMagick 将 PNG 转换为 ICO：
+   ```bash
+   # ImageMagick 方式（需安装 ImageMagick）
+   magick convert assets/icon/app_icon.png -define icon:auto-resize=256,128,64,48,32,16 windows/runner/resources/app_icon.ico
+   ```
+3. 替换 `windows/runner/resources/app_icon.ico` 文件即可
+
+> Windows 图标在 `windows/runner/Runner.rc` 中通过 `IDI_APP_ICON` 引用，无需额外配置。
 
 ## 开发命令
 
@@ -123,6 +157,9 @@ flutter run
 flutter analyze          # 静态分析
 dart run build_runner build   # 代码生成
 dart run build_runner watch  # 监听模式代码生成
+
+# 清理并重新构建
+flutter clean && dart run build_runner build --delete-conflicting-outputs && flutter run
 ```
 
 ## AI 对话功能

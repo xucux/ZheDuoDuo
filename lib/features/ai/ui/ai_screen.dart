@@ -7,15 +7,17 @@
 // - 模拟发送消息（原型演示）
 // - AI 配置从数据库加载，会话数据保存在 SharedPreferences
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/utils/image_compress.dart';
+import '../../../core/utils/platform_utils.dart';
 import '../../../shared/theme/antd_colors.dart';
 import '../../../shared/theme/theme_provider.dart';
 import '../../mcp/providers/mcp_provider.dart';
@@ -35,11 +37,14 @@ class _PendingImageInfo {
   final String path;
   final String? ocrText;
   final bool ocrDone;
+  /// 处理模式：'ocr' = OCR 识别后文本带入，'base64' = Base64 图片带入
+  final String mode;
 
   const _PendingImageInfo({
     required this.path,
     this.ocrText,
     this.ocrDone = false,
+    this.mode = 'ocr',
   });
 }
 
@@ -90,8 +95,8 @@ class _AiScreenState extends ConsumerState<AiScreen> {
   /// AI 对话设置
   AiChatSettings _settings = const AiChatSettings();
 
-  /// 图片选择器
-  final _imagePicker = ImagePicker();
+  /// 当前激活 AI 配置的能力列表
+  List<String> _capabilities = const [];
 
   /// 已选择的待发送图片列表（含 OCR 结果）
   final List<_PendingImageInfo> _pendingImages = [];
@@ -140,6 +145,15 @@ class _AiScreenState extends ConsumerState<AiScreen> {
         temperature: config.temperature,
         maxTokens: config.maxTokens,
       );
+      _capabilities = _parseCapabilities(config.capabilities, config.protocol);
+      // 如果数据库中 capabilities 仅为 ["text"]，尝试从匹配的预设补充更完整的能力
+      if (_capabilities.length == 1 && _capabilities.contains('text')) {
+        final preset = AiProviderPreset.findByName(config.providerPreset) ??
+            AiProviderPreset.findById(config.providerPreset);
+        if (preset != null && preset.capabilities.length > 1) {
+          _capabilities = List<String>.from(preset.capabilities);
+        }
+      }
       _sessions = sessions;
       // 若无会话则自动创建一个
       if (_sessions.isEmpty) {
@@ -905,7 +919,7 @@ class _AiScreenState extends ConsumerState<AiScreen> {
                               fit: BoxFit.cover,
                             ),
                           ),
-                          if (!img.ocrDone)
+                          if (img.mode == 'ocr' && !img.ocrDone)
                             const Positioned(
                               bottom: 2,
                               right: 2,
@@ -915,11 +929,25 @@ class _AiScreenState extends ConsumerState<AiScreen> {
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               ),
                             ),
-                          if (img.ocrDone && img.ocrText != null && img.ocrText!.isNotEmpty)
+                          if (img.mode == 'ocr' && img.ocrDone && img.ocrText != null && img.ocrText!.isNotEmpty)
                             const Positioned(
                               bottom: 2,
                               right: 2,
                               child: Icon(Icons.check_circle, size: 14, color: Colors.green),
+                            ),
+                          if (img.mode == 'base64')
+                            Positioned(
+                              bottom: 2,
+                              right: 2,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text('多模态',
+                                  style: TextStyle(fontSize: 8, color: Colors.white)),
+                              ),
                             ),
                           Positioned(
                             top: -4,
@@ -943,9 +971,11 @@ class _AiScreenState extends ConsumerState<AiScreen> {
                         width: 56,
                         height: 28,
                         child: Text(
-                          img.ocrText != null && img.ocrText!.isNotEmpty
-                              ? img.ocrText!.replaceAll('\n', ' ')
-                              : (img.ocrDone ? '无识别结果' : '识别中…'),
+                          img.mode == 'base64'
+                              ? '多模态'
+                              : (img.ocrText != null && img.ocrText!.isNotEmpty
+                                  ? img.ocrText!.replaceAll('\n', ' ')
+                                  : (img.ocrDone ? '无识别结果' : '识别中…')),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -962,13 +992,13 @@ class _AiScreenState extends ConsumerState<AiScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // OCR 图片选择按钮
+              // OCR / 多模态 图片选择按钮
               SizedBox(
                 width: 36,
                 height: 36,
                 child: IconButton(
-                  onPressed: _pickImage,
-                  tooltip: 'OCR 识别图片',
+                  onPressed: _showImageActionSheet,
+                  tooltip: '图片识别',
                   icon: Icon(
                     Icons.document_scanner_outlined,
                     size: 20,
@@ -1072,44 +1102,122 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     );
   }
 
-  /// 选择图片并自动 OCR
-  Future<void> _pickImage() async {
-    final xFile = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 70,
-    );
-    if (xFile == null) return;
+  /// 显示图片处理模式选择弹窗
+  void _showImageActionSheet() {
+    final supportsVision = _capabilities.contains('image') ||
+        _capabilities.contains('multimodal') ||
+        _capabilities.contains('vision');
 
-    _pendingImages.add(_PendingImageInfo(path: xFile.path));
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text('选择图片处理方式',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.text_snippet_outlined),
+                  title: const Text('OCR 识别'),
+                  subtitle: const Text('提取图片文字后带入会话'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickImageForOcr();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.image_outlined,
+                    color: supportsVision
+                        ? null
+                        : Theme.of(context).disabledColor,
+                  ),
+                  title: Text('多模态识别',
+                    style: TextStyle(
+                      color: supportsVision
+                          ? null
+                          : Theme.of(context).disabledColor,
+                    ),
+                  ),
+                  subtitle: Text(
+                    supportsVision
+                        ? '压缩图片后以 Base64 带入会话'
+                        : '当前模型不支持图片/多模态能力',
+                    style: TextStyle(
+                      color: supportsVision
+                          ? null
+                          : Theme.of(context).disabledColor,
+                    ),
+                  ),
+                  enabled: supportsVision,
+                  onTap: supportsVision
+                      ? () {
+                          Navigator.pop(ctx);
+                          _pickImageAsBase64();
+                        }
+                      : null,
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 选择图片并自动 OCR
+  Future<void> _pickImageForOcr() async {
+    // 使用平台适配工具选择图片（桌面端自动回退到文件选择器）
+    final path = await PlatformUtils.pickImageFromGallery();
+    if (path == null) return;
+
+    _pendingImages.add(_PendingImageInfo(path: path));
     setState(() {});
 
     // 异步执行 OCR
     try {
       final ocrService = OcrService();
-      final ocrResult = await ocrService.recognizeImage(xFile.path);
-      final existingIdx = _pendingImages.indexWhere((p) => p.path == xFile.path);
+      final ocrResult = await ocrService.recognizeImage(path);
+      final existingIdx = _pendingImages.indexWhere((p) => p.path == path);
       if (existingIdx >= 0) {
         setState(() {
           _pendingImages[existingIdx] = _PendingImageInfo(
-            path: xFile.path,
+            path: path,
             ocrText: ocrResult,
             ocrDone: true,
           );
         });
       }
     } catch (_) {
-      final existingIdx = _pendingImages.indexWhere((p) => p.path == xFile.path);
+      final existingIdx = _pendingImages.indexWhere((p) => p.path == path);
       if (existingIdx >= 0) {
         setState(() {
           _pendingImages[existingIdx] = _PendingImageInfo(
-            path: xFile.path,
+            path: path,
             ocrDone: true,
           );
         });
       }
     }
+  }
+
+  /// 选择图片并以 Base64 模式带入会话
+  Future<void> _pickImageAsBase64() async {
+    final path = await PlatformUtils.pickImageFromGallery();
+    if (path == null) return;
+
+    _pendingImages.add(_PendingImageInfo(path: path, mode: 'base64'));
+    setState(() {});
   }
 
   // ==================== 操作方法 ====================
@@ -1135,8 +1243,24 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     final imagePaths = pendingInfos.map((i) => i.path).toList();
 
     final ocrParts = <String>[];
+    final base64Images = <String>[];
     for (final img in pendingInfos) {
-      if (img.ocrText != null && img.ocrText!.isNotEmpty) {
+      if (img.mode == 'base64') {
+        try {
+          final compressDao = ref.read(imageCompressSettingsDaoProvider);
+          final compressed = await ImageUtils.prepareImage(
+            File(img.path),
+            compressDao: compressDao,
+          );
+          if (compressed != null) {
+            final bytes = await File(compressed.filePath).readAsBytes();
+            final base64Str = base64Encode(bytes);
+            base64Images.add('data:image/jpeg;base64,$base64Str');
+          }
+        } catch (_) {
+          // 压缩或读取失败则跳过该图片
+        }
+      } else if (img.ocrText != null && img.ocrText!.isNotEmpty) {
         ocrParts.add('[图片识别结果]\n${img.ocrText}');
       }
     }
@@ -1212,7 +1336,7 @@ class _AiScreenState extends ConsumerState<AiScreen> {
             settings: _settings,
             messages: messages,
             systemPrompt: systemPrompt,
-            currentUserImages: const [],
+            currentUserImages: base64Images,
             mcpTools: mcpTools,
             onMcpToolCall: onMcpCall,
             streamCallbacks: StreamCallbacks(
@@ -1337,6 +1461,16 @@ class _AiScreenState extends ConsumerState<AiScreen> {
   }
 
   // ==================== 工具方法 ====================
+
+  /// 解析 capabilities JSON 字符串，失败则按协议返回默认能力
+  List<String> _parseCapabilities(String capabilitiesJson, String protocol) {
+    try {
+      final list = jsonDecode(capabilitiesJson) as List;
+      return list.cast<String>().toList();
+    } catch (_) {
+      return ['text'];
+    }
+  }
 
   /// 格式化时间（HH:mm）
   String _formatTime(DateTime dt) {

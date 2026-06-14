@@ -1,3 +1,13 @@
+// OCR 识别测试页面
+//
+// 提供图片文字识别的测试界面，支持：
+// - 从相册/文件选择器选择图片
+// - 拍照选择图片（仅移动端）
+// - 三种输出格式：完整文本、JSON 数据、Markdown 格式
+// - 结果复制到剪贴板
+//
+// 桌面端自动隐藏拍照按钮，使用文件选择器替代。
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -5,7 +15,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/utils/platform_utils.dart';
 import '../services/ocr_service.dart';
+import '../services/ocr_service_interface.dart' show OcrStructuredResult;
 
 class OcrTestScreen extends StatefulWidget {
   const OcrTestScreen({super.key});
@@ -17,7 +29,6 @@ class OcrTestScreen extends StatefulWidget {
 class _OcrTestScreenState extends State<OcrTestScreen>
     with SingleTickerProviderStateMixin {
   final _ocrService = OcrService();
-  final _picker = ImagePicker();
   File? _image;
   bool _loading = false;
   String? _error;
@@ -47,15 +58,14 @@ class _OcrTestScreenState extends State<OcrTestScreen>
     super.dispose();
   }
 
+  /// 选择图片
+  ///
+  /// 使用平台适配工具选择图片，桌面端自动回退到文件选择器。
   Future<void> _pickImage(ImageSource source) async {
-    final xfile = await _picker.pickImage(
-      source: source,
-      maxWidth: 2048,
-      maxHeight: 2048,
-    );
-    if (xfile != null) {
+    final path = await PlatformUtils.pickImage(source);
+    if (path != null) {
       setState(() {
-        _image = File(xfile.path);
+        _image = File(path);
         _rawText = '';
         _rawController.clear();
         _jsonController.clear();
@@ -65,6 +75,9 @@ class _OcrTestScreenState extends State<OcrTestScreen>
     }
   }
 
+  /// 执行 OCR 识别
+  ///
+  /// 并行执行三种格式的识别，结果分别展示在三个 Tab 中。
   Future<void> _recognize() async {
     if (_image == null) return;
     setState(() {
@@ -78,10 +91,10 @@ class _OcrTestScreenState extends State<OcrTestScreen>
         _ocrService.recognizeAsMarkdown(path),
         _ocrService.recognizeImage(path),
       ]);
-      final structured = results[0] as Map<String, dynamic>;
+      final structured = results[0] as OcrStructuredResult;
       final markdown = results[1] as String;
       final raw = results[2] as String;
-      final jsonStr = const JsonEncoder.withIndent('  ').convert(structured);
+      final jsonStr = const JsonEncoder.withIndent('  ').convert(structured.toMap());
       setState(() {
         _rawText = raw;
         _rawController.text = raw;
@@ -97,6 +110,7 @@ class _OcrTestScreenState extends State<OcrTestScreen>
     }
   }
 
+  /// 复制文本到剪贴板
   void _copyText(String text) {
     Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
@@ -141,6 +155,7 @@ class _OcrTestScreenState extends State<OcrTestScreen>
     );
   }
 
+  /// 构建图片选择区域
   Widget _buildImageSection(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -180,14 +195,17 @@ class _OcrTestScreenState extends State<OcrTestScreen>
                   label: const Text('从相册选择'),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _loading ? null : () => _pickImage(ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('拍照'),
+              // 桌面端隐藏拍照按钮（无摄像头支持）
+              if (PlatformUtils.isCameraSupported) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _loading ? null : () => _pickImage(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('拍照'),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -204,6 +222,7 @@ class _OcrTestScreenState extends State<OcrTestScreen>
     );
   }
 
+  /// 构建识别结果展示区域
   Widget _buildResultSection() {
     return Expanded(
       child: TabBarView(
@@ -217,6 +236,7 @@ class _OcrTestScreenState extends State<OcrTestScreen>
     );
   }
 
+  /// 构建单个结果编辑器 Tab
   Widget _buildEditorTab(TextEditingController controller, String label) {
     return Column(
       children: [

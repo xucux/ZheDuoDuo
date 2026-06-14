@@ -47,6 +47,7 @@ class AiProviderPreset {
   final AiProtocol protocol;
   final String baseUrl;
   final String model;
+  final List<String> capabilities;
 
   const AiProviderPreset({
     required this.id,
@@ -54,6 +55,7 @@ class AiProviderPreset {
     required this.protocol,
     required this.baseUrl,
     required this.model,
+    this.capabilities = const ['text'],
   });
 
   /// 内置服务商预设列表
@@ -64,6 +66,7 @@ class AiProviderPreset {
       protocol: AiProtocol.openaiChat,
       baseUrl: 'https://api.deepseek.com/v1',
       model: 'deepseek-chat',
+      capabilities: ['text', 'reasoning'],
     ),
     AiProviderPreset(
       id: 'siliconflow',
@@ -71,6 +74,7 @@ class AiProviderPreset {
       protocol: AiProtocol.openaiChat,
       baseUrl: 'https://api.siliconflow.cn/v1',
       model: 'Qwen/Qwen2.5-72B-Instruct',
+      capabilities: ['text', 'image', 'multimodal', 'reasoning'],
     ),
     AiProviderPreset(
       id: 'openai',
@@ -78,6 +82,7 @@ class AiProviderPreset {
       protocol: AiProtocol.openaiChat,
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-4o',
+      capabilities: ['text', 'image', 'multimodal', 'vision', 'tool', 'audio'],
     ),
     AiProviderPreset(
       id: 'claude',
@@ -85,6 +90,7 @@ class AiProviderPreset {
       protocol: AiProtocol.anthropic,
       baseUrl: 'https://api.anthropic.com',
       model: 'claude-3-5-sonnet-20241022',
+      capabilities: ['text', 'image', 'multimodal', 'vision', 'tool'],
     ),
     AiProviderPreset(
       id: 'xiaomimimo',
@@ -92,6 +98,7 @@ class AiProviderPreset {
       protocol: AiProtocol.openaiChat,
       baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
       model: '',
+      capabilities: ['text'],
     ),
     AiProviderPreset(
       id: 'custom',
@@ -99,6 +106,7 @@ class AiProviderPreset {
       protocol: AiProtocol.openaiChat,
       baseUrl: '',
       model: '',
+      capabilities: ['text'],
     ),
   ];
 
@@ -106,6 +114,14 @@ class AiProviderPreset {
   static AiProviderPreset? findById(String id) {
     for (final p in builtIn) {
       if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  /// 根据显示名称查找预设
+  static AiProviderPreset? findByName(String name) {
+    for (final p in builtIn) {
+      if (p.name == name) return p;
     }
     return null;
   }
@@ -127,6 +143,7 @@ class AiProviderConfig {
   final String agentId;
   final double temperature;
   final int maxTokens;
+  final List<String> capabilities;
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -141,6 +158,7 @@ class AiProviderConfig {
     this.agentId = 'default',
     this.temperature = 0.7,
     this.maxTokens = 4096,
+    this.capabilities = const ['text'],
     this.isActive = false,
     required this.createdAt,
     required this.updatedAt,
@@ -156,6 +174,7 @@ class AiProviderConfig {
     String? agentId,
     double? temperature,
     int? maxTokens,
+    List<String>? capabilities,
     bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -170,6 +189,7 @@ class AiProviderConfig {
       agentId: agentId ?? this.agentId,
       temperature: temperature ?? this.temperature,
       maxTokens: maxTokens ?? this.maxTokens,
+      capabilities: capabilities ?? this.capabilities,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

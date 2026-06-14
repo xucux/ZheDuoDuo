@@ -49,3 +49,6 @@ backups/**
 backup*/**
 test/**
 .claude/**
+macos/**
+windows/**
+linux/**

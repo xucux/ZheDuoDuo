@@ -4536,6 +4536,18 @@ class $AiConfigsTable extends AiConfigs
     requiredDuringInsert: false,
     defaultValue: const Constant(4096),
   );
+  static const VerificationMeta _capabilitiesMeta = const VerificationMeta(
+    'capabilities',
+  );
+  @override
+  late final GeneratedColumn<String> capabilities = GeneratedColumn<String>(
+    'capabilities',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
   static const VerificationMeta _isActiveMeta = const VerificationMeta(
     'isActive',
   );
@@ -4582,6 +4594,7 @@ class $AiConfigsTable extends AiConfigs
     agentPrompt,
     temperature,
     maxTokens,
+    capabilities,
     isActive,
     createdAt,
     updatedAt,
@@ -4666,6 +4679,15 @@ class $AiConfigsTable extends AiConfigs
         maxTokens.isAcceptableOrUnknown(data['max_tokens']!, _maxTokensMeta),
       );
     }
+    if (data.containsKey('capabilities')) {
+      context.handle(
+        _capabilitiesMeta,
+        capabilities.isAcceptableOrUnknown(
+          data['capabilities']!,
+          _capabilitiesMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_active')) {
       context.handle(
         _isActiveMeta,
@@ -4737,6 +4759,10 @@ class $AiConfigsTable extends AiConfigs
         DriftSqlType.int,
         data['${effectivePrefix}max_tokens'],
       )!,
+      capabilities: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}capabilities'],
+      )!,
       isActive: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}is_active'],
@@ -4789,6 +4815,9 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
   /// 最大输出 token 数
   final int maxTokens;
 
+  /// 模型支持的能力（JSON 数组字符串，如 ["text","image","multimodal"]）
+  final String capabilities;
+
   /// 是否为当前激活的配置
   final int isActive;
 
@@ -4808,6 +4837,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
     required this.agentPrompt,
     required this.temperature,
     required this.maxTokens,
+    required this.capabilities,
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
@@ -4825,6 +4855,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
     map['agent_prompt'] = Variable<String>(agentPrompt);
     map['temperature'] = Variable<double>(temperature);
     map['max_tokens'] = Variable<int>(maxTokens);
+    map['capabilities'] = Variable<String>(capabilities);
     map['is_active'] = Variable<int>(isActive);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -4843,6 +4874,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
       agentPrompt: Value(agentPrompt),
       temperature: Value(temperature),
       maxTokens: Value(maxTokens),
+      capabilities: Value(capabilities),
       isActive: Value(isActive),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -4865,6 +4897,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
       agentPrompt: serializer.fromJson<String>(json['agentPrompt']),
       temperature: serializer.fromJson<double>(json['temperature']),
       maxTokens: serializer.fromJson<int>(json['maxTokens']),
+      capabilities: serializer.fromJson<String>(json['capabilities']),
       isActive: serializer.fromJson<int>(json['isActive']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -4884,6 +4917,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
       'agentPrompt': serializer.toJson<String>(agentPrompt),
       'temperature': serializer.toJson<double>(temperature),
       'maxTokens': serializer.toJson<int>(maxTokens),
+      'capabilities': serializer.toJson<String>(capabilities),
       'isActive': serializer.toJson<int>(isActive),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -4901,6 +4935,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
     String? agentPrompt,
     double? temperature,
     int? maxTokens,
+    String? capabilities,
     int? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -4915,6 +4950,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
     agentPrompt: agentPrompt ?? this.agentPrompt,
     temperature: temperature ?? this.temperature,
     maxTokens: maxTokens ?? this.maxTokens,
+    capabilities: capabilities ?? this.capabilities,
     isActive: isActive ?? this.isActive,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -4937,6 +4973,9 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
           ? data.temperature.value
           : this.temperature,
       maxTokens: data.maxTokens.present ? data.maxTokens.value : this.maxTokens,
+      capabilities: data.capabilities.present
+          ? data.capabilities.value
+          : this.capabilities,
       isActive: data.isActive.present ? data.isActive.value : this.isActive,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -4956,6 +4995,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
           ..write('agentPrompt: $agentPrompt, ')
           ..write('temperature: $temperature, ')
           ..write('maxTokens: $maxTokens, ')
+          ..write('capabilities: $capabilities, ')
           ..write('isActive: $isActive, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -4975,6 +5015,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
     agentPrompt,
     temperature,
     maxTokens,
+    capabilities,
     isActive,
     createdAt,
     updatedAt,
@@ -4993,6 +5034,7 @@ class AiConfig extends DataClass implements Insertable<AiConfig> {
           other.agentPrompt == this.agentPrompt &&
           other.temperature == this.temperature &&
           other.maxTokens == this.maxTokens &&
+          other.capabilities == this.capabilities &&
           other.isActive == this.isActive &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -5009,6 +5051,7 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
   final Value<String> agentPrompt;
   final Value<double> temperature;
   final Value<int> maxTokens;
+  final Value<String> capabilities;
   final Value<int> isActive;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -5024,6 +5067,7 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
     this.agentPrompt = const Value.absent(),
     this.temperature = const Value.absent(),
     this.maxTokens = const Value.absent(),
+    this.capabilities = const Value.absent(),
     this.isActive = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -5040,6 +5084,7 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
     this.agentPrompt = const Value.absent(),
     this.temperature = const Value.absent(),
     this.maxTokens = const Value.absent(),
+    this.capabilities = const Value.absent(),
     this.isActive = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
@@ -5058,6 +5103,7 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
     Expression<String>? agentPrompt,
     Expression<double>? temperature,
     Expression<int>? maxTokens,
+    Expression<String>? capabilities,
     Expression<int>? isActive,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -5074,6 +5120,7 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
       if (agentPrompt != null) 'agent_prompt': agentPrompt,
       if (temperature != null) 'temperature': temperature,
       if (maxTokens != null) 'max_tokens': maxTokens,
+      if (capabilities != null) 'capabilities': capabilities,
       if (isActive != null) 'is_active': isActive,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -5092,6 +5139,7 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
     Value<String>? agentPrompt,
     Value<double>? temperature,
     Value<int>? maxTokens,
+    Value<String>? capabilities,
     Value<int>? isActive,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -5108,6 +5156,7 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
       agentPrompt: agentPrompt ?? this.agentPrompt,
       temperature: temperature ?? this.temperature,
       maxTokens: maxTokens ?? this.maxTokens,
+      capabilities: capabilities ?? this.capabilities,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -5148,6 +5197,9 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
     if (maxTokens.present) {
       map['max_tokens'] = Variable<int>(maxTokens.value);
     }
+    if (capabilities.present) {
+      map['capabilities'] = Variable<String>(capabilities.value);
+    }
     if (isActive.present) {
       map['is_active'] = Variable<int>(isActive.value);
     }
@@ -5176,6 +5228,7 @@ class AiConfigsCompanion extends UpdateCompanion<AiConfig> {
           ..write('agentPrompt: $agentPrompt, ')
           ..write('temperature: $temperature, ')
           ..write('maxTokens: $maxTokens, ')
+          ..write('capabilities: $capabilities, ')
           ..write('isActive: $isActive, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -8745,6 +8798,7 @@ typedef $$AiConfigsTableCreateCompanionBuilder =
       Value<String> agentPrompt,
       Value<double> temperature,
       Value<int> maxTokens,
+      Value<String> capabilities,
       Value<int> isActive,
       required DateTime createdAt,
       required DateTime updatedAt,
@@ -8762,6 +8816,7 @@ typedef $$AiConfigsTableUpdateCompanionBuilder =
       Value<String> agentPrompt,
       Value<double> temperature,
       Value<int> maxTokens,
+      Value<String> capabilities,
       Value<int> isActive,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -8824,6 +8879,11 @@ class $$AiConfigsTableFilterComposer
 
   ColumnFilters<int> get maxTokens => $composableBuilder(
     column: $table.maxTokens,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get capabilities => $composableBuilder(
+    column: $table.capabilities,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8902,6 +8962,11 @@ class $$AiConfigsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get capabilities => $composableBuilder(
+    column: $table.capabilities,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get isActive => $composableBuilder(
     column: $table.isActive,
     builder: (column) => ColumnOrderings(column),
@@ -8963,6 +9028,11 @@ class $$AiConfigsTableAnnotationComposer
   GeneratedColumn<int> get maxTokens =>
       $composableBuilder(column: $table.maxTokens, builder: (column) => column);
 
+  GeneratedColumn<String> get capabilities => $composableBuilder(
+    column: $table.capabilities,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get isActive =>
       $composableBuilder(column: $table.isActive, builder: (column) => column);
 
@@ -9011,6 +9081,7 @@ class $$AiConfigsTableTableManager
                 Value<String> agentPrompt = const Value.absent(),
                 Value<double> temperature = const Value.absent(),
                 Value<int> maxTokens = const Value.absent(),
+                Value<String> capabilities = const Value.absent(),
                 Value<int> isActive = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -9026,6 +9097,7 @@ class $$AiConfigsTableTableManager
                 agentPrompt: agentPrompt,
                 temperature: temperature,
                 maxTokens: maxTokens,
+                capabilities: capabilities,
                 isActive: isActive,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -9043,6 +9115,7 @@ class $$AiConfigsTableTableManager
                 Value<String> agentPrompt = const Value.absent(),
                 Value<double> temperature = const Value.absent(),
                 Value<int> maxTokens = const Value.absent(),
+                Value<String> capabilities = const Value.absent(),
                 Value<int> isActive = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
@@ -9058,6 +9131,7 @@ class $$AiConfigsTableTableManager
                 agentPrompt: agentPrompt,
                 temperature: temperature,
                 maxTokens: maxTokens,
+                capabilities: capabilities,
                 isActive: isActive,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

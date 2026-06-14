@@ -102,11 +102,13 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         children: [
-          _buildQuickChip(context, label: '全部', selected: filters.platform == null && filters.category == null, onTap: () => ref.read(dealFiltersProvider.notifier).reset()),
+          _buildQuickChip(context, label: '全部', selected: filters.platform == null && filters.category == null && filters.tag == null, onTap: () => ref.read(dealFiltersProvider.notifier).reset()),
           const SizedBox(width: 8),
           _buildQuickChip(context, label: filters.platform ?? '平台', selected: filters.platform != null, onTap: () => _showPlatformPicker(context)),
           const SizedBox(width: 8),
           _buildQuickChip(context, label: filters.category ?? '分类', selected: filters.category != null, onTap: () => _showCategoryPicker(context)),
+          const SizedBox(width: 8),
+          _buildQuickChip(context, label: filters.tag ?? '标签', selected: filters.tag != null, onTap: () => _showTagPicker(context)),
           const SizedBox(width: 8),
           _buildQuickChip(context, label: _getSortLabel(filters.sortBy), selected: filters.sortBy != 'created_at', onTap: () => _showSortPicker(context)),
         ],
@@ -436,7 +438,7 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
   }
 
   String _formatDateShort(DateTime dt) {
-    return '${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 
   String _getSortLabel(String sortBy) {
@@ -463,14 +465,41 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     ref.read(platformsProvider).whenData((platforms) {
       showModalBottomSheet(
         context: context,
+        isScrollControlled: true,
         showDragHandle: false,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Padding(padding: EdgeInsets.all(16), child: Text('选择平台', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-          ListTile(title: const Text('全部平台'), trailing: ref.read(dealFiltersProvider).platform == null ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null, onTap: () { ref.read(dealFiltersProvider.notifier).setPlatform(null); Navigator.pop(ctx); }),
-          ...platforms.map((p) => ListTile(title: Text(p), trailing: ref.read(dealFiltersProvider).platform == p ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null, onTap: () { ref.read(dealFiltersProvider.notifier).setPlatform(p); Navigator.pop(ctx); })),
-          const SizedBox(height: 8),
-        ])),
+        builder: (ctx) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(padding: EdgeInsets.all(16), child: Text('选择平台', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: platforms.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return ListTile(
+                          title: const Text('全部平台'),
+                          trailing: ref.read(dealFiltersProvider).platform == null ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
+                          onTap: () { ref.read(dealFiltersProvider.notifier).setPlatform(null); Navigator.pop(ctx); },
+                        );
+                      }
+                      final p = platforms[index - 1];
+                      return ListTile(
+                        title: Text(p),
+                        trailing: ref.read(dealFiltersProvider).platform == p ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
+                        onTap: () { ref.read(dealFiltersProvider.notifier).setPlatform(p); Navigator.pop(ctx); },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
       );
     });
   }
@@ -479,14 +508,41 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     ref.read(categoriesProvider).whenData((categories) {
       showModalBottomSheet(
         context: context,
+        isScrollControlled: true,
         showDragHandle: false,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Padding(padding: EdgeInsets.all(16), child: Text('选择分类', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-          ListTile(title: const Text('全部分类'), trailing: ref.read(dealFiltersProvider).category == null ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null, onTap: () { ref.read(dealFiltersProvider.notifier).setCategory(null); Navigator.pop(ctx); }),
-          ...categories.map((c) => ListTile(title: Text(c), trailing: ref.read(dealFiltersProvider).category == c ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null, onTap: () { ref.read(dealFiltersProvider.notifier).setCategory(c); Navigator.pop(ctx); })),
-          const SizedBox(height: 8),
-        ])),
+        builder: (ctx) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(padding: EdgeInsets.all(16), child: Text('选择分类', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: categories.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return ListTile(
+                          title: const Text('全部分类'),
+                          trailing: ref.read(dealFiltersProvider).category == null ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
+                          onTap: () { ref.read(dealFiltersProvider.notifier).setCategory(null); Navigator.pop(ctx); },
+                        );
+                      }
+                      final c = categories[index - 1];
+                      return ListTile(
+                        title: Text(c),
+                        trailing: ref.read(dealFiltersProvider).category == c ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
+                        onTap: () { ref.read(dealFiltersProvider.notifier).setCategory(c); Navigator.pop(ctx); },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
       );
     });
   }
@@ -512,6 +568,49 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
     final current = ref.read(dealFiltersProvider);
     final isSelected = current.sortBy == sortBy && current.ascending == ascending;
     return ListTile(title: Text(label), trailing: isSelected ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null, onTap: () { ref.read(dealFiltersProvider.notifier).setSortBy(sortBy, ascending: ascending); Navigator.pop(context); });
+  }
+
+  void _showTagPicker(BuildContext context) {
+    ref.read(tagsProvider).whenData((tags) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: false,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(padding: EdgeInsets.all(16), child: Text('选择标签', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: tags.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return ListTile(
+                          title: const Text('全部标签'),
+                          trailing: ref.read(dealFiltersProvider).tag == null ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
+                          onTap: () { ref.read(dealFiltersProvider.notifier).setTag(null); Navigator.pop(ctx); },
+                        );
+                      }
+                      final t = tags[index - 1];
+                      return ListTile(
+                        title: Text(t),
+                        trailing: ref.read(dealFiltersProvider).tag == t ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
+                        onTap: () { ref.read(dealFiltersProvider.notifier).setTag(t); Navigator.pop(ctx); },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
   }
 
   void _confirmDelete(BuildContext context, String dealId) {
@@ -541,6 +640,8 @@ class _FilterSheet extends ConsumerStatefulWidget {
 }
 
 class _FilterSheetState extends ConsumerState<_FilterSheet> {
+  bool _tagsExpanded = false;
+
   Future<void> _pickCustomDateRange() async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
@@ -565,6 +666,7 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
     final filters = ref.watch(dealFiltersProvider);
     final platformsAsync = ref.watch(platformsProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
+    final tagsAsync = ref.watch(tagsProvider);
     final theme = Theme.of(context);
 
     return ListView(
@@ -593,6 +695,44 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
             _buildSheetChip(context, ref, '全部', selected: filters.category == null, onTap: () => ref.read(dealFiltersProvider.notifier).setCategory(null)),
             ...categories.map((c) => _buildSheetChip(context, ref, c, selected: filters.category == c, onTap: () => ref.read(dealFiltersProvider.notifier).setCategory(c))),
           ]),
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: () => setState(() => _tagsExpanded = !_tagsExpanded),
+          child: Row(
+            children: [
+              Text('标签', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: theme.colorScheme.onSurface)),
+              const SizedBox(width: 4),
+              Icon(_tagsExpanded ? Icons.expand_less : Icons.expand_more, size: 16, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        tagsAsync.when(
+          data: (tags) {
+            const maxCollapsed = 15;
+            final showAll = _tagsExpanded || tags.length <= maxCollapsed;
+            final displayTags = showAll ? tags : tags.take(maxCollapsed).toList();
+            return Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _buildSheetChip(context, ref, '全部', selected: filters.tag == null, onTap: () => ref.read(dealFiltersProvider.notifier).setTag(null)),
+                ...displayTags.map((t) => _buildSheetChip(context, ref, t, selected: filters.tag == t, onTap: () => ref.read(dealFiltersProvider.notifier).setTag(t))),
+                if (!showAll)
+                  GestureDetector(
+                    onTap: () => setState(() => _tagsExpanded = true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16)),
+                      child: Text('+${tags.length - maxCollapsed}', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+                    ),
+                  ),
+              ],
+            );
+          },
           loading: () => const SizedBox.shrink(),
           error: (_, __) => const SizedBox.shrink(),
         ),

@@ -52,6 +52,24 @@ class SyncDao extends DatabaseAccessor<AppDatabase> {
     );
   }
 
+  /// 获取下一个版本号并递增
+  ///
+  /// 原子性读取当前 localRevision + 1，并更新到 sync_meta。
+  Future<int> nextRevision() async {
+    final meta = await getSyncMeta();
+    final next = (meta?.localRevision ?? 0) + 1;
+    await (update(attachedDatabase.syncMeta)..where((t) => t.id.equals(1))).write(
+      SyncMetaCompanion(localRevision: Value(next)),
+    );
+    return next;
+  }
+
+  /// 获取设备 ID，若不存在返回 null
+  Future<String?> getDeviceIdOrNull() async {
+    final meta = await getSyncMeta();
+    return meta?.deviceId;
+  }
+
   /// 记录一条新的数据变更日志
   ///
   /// [deviceId] 设备 ID，[entityType] 实体类型（如 deal），
@@ -66,5 +84,10 @@ class SyncDao extends DatabaseAccessor<AppDatabase> {
       revision: revision,
       changedAt: DateTime.now(),
     ));
+  }
+
+  /// 删除已同步的变更日志记录（防止表无限增长）
+  Future<int> purgeSyncedChanges() async {
+    return (delete(attachedDatabase.syncChangelog)..where((t) => t.syncedAt.isNotNull())).go();
   }
 }

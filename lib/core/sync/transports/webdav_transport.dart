@@ -76,6 +76,39 @@ class WebDavTransport implements SyncTransport {
   }
 
   @override
+  Future<void> delete(String remotePath) async {
+    final path = _normalizePath(remotePath);
+    AppLogger.instance.i('[WebDAV] 删除: $path');
+    try {
+      await _client.remove(path);
+      AppLogger.instance.i('[WebDAV] 删除成功');
+    } catch (e) {
+      AppLogger.instance.e('[WebDAV] 删除失败', e);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<RemoteFileInfo>> listDetails(String prefix) async {
+    try {
+      AppLogger.instance.i('[WebDAV] 列举详情: $prefix');
+      final files = await _client.readDir(_normalizePath(prefix));
+      AppLogger.instance.i('[WebDAV] 列举详情成功: ${files.length} 条目');
+      return files
+          .where((f) => !f.isDir && f.name.endsWith('.zip'))
+          .map((f) => RemoteFileInfo(
+                name: f.name,
+                size: f.size ?? 0,
+                modifiedAt: f.modified ?? DateTime(1970),
+              ))
+          .toList();
+    } catch (e) {
+      AppLogger.instance.e('[WebDAV] 列举详情失败', e);
+      return [];
+    }
+  }
+
+  @override
   Future<bool> testConnection() async {
     try {
       AppLogger.instance.i('[WebDAV] 测试连接');

@@ -98,6 +98,7 @@ class AiConfigDao extends DatabaseAccessor<AppDatabase> with _$AiConfigDaoMixin 
       agentPrompt: const Value(''),
       temperature: const Value(0.7),
       maxTokens: const Value(4096),
+      capabilities: const Value('["text"]'),
       isActive: const Value(1),
       createdAt: now,
       updatedAt: now,

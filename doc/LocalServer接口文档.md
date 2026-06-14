@@ -96,6 +96,7 @@ Authorization: Bearer zheduoduo
     "visualType": "image",
     "asciiArt": null,
     "salesJson": null,
+    "sourceJson": null,
     "isLowestPrice": 0,
     "createdAt": "2026-06-13T10:00:00.000",
     "updatedAt": "2026-06-13T10:00:00.000",
@@ -143,6 +144,7 @@ Authorization: Bearer zheduoduo
 | visualType | string | 否 | 默认 `none` |
 | asciiArt | string | 否 | — |
 | salesJson | string | 否 | — |
+| sourceJson | string | 否 | 来源信息 JSON，如 `{"sourceType":"手动新增","sourceRemark":null}`，传 `null` 则跳过赋值 |
 | tags | string[] | 否 | 标签列表 |
 | promotions | string[] | 否 | 促销列表 |
 | coupons | object[] | 否 | 优惠券列表 |
@@ -244,6 +246,7 @@ Authorization: Bearer zheduoduo
 | visualType | string | 视觉类型（`none` / `image` / `ascii`） |
 | asciiArt | string \| null | ASCII 艺术图 |
 | salesJson | string \| null | 销量 JSON |
+| sourceJson | string \| null | 来源信息 JSON |
 | isLowestPrice | int | 是否最低价（`0` / `1`） |
 | createdAt | string | 创建时间（ISO8601） |
 | updatedAt | string | 更新时间（ISO8601） |

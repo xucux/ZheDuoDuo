@@ -75,6 +75,8 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
   bool _isEditing = false;
   bool _isLowestPrice = false;
   DateTime? _createdAt;
+  String? _yamlSourceJson;
+  String? _sourceJson;
 
   // 图片压缩结果信息
   int? _imageOriginalSize;
@@ -122,6 +124,7 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
       _currency = dw.deal.currency;
       _isLowestPrice = dw.deal.isLowestPrice == 1;
       _createdAt = dw.deal.createdAt;
+      _sourceJson = dw.deal.sourceJson;
 
       // 加载图片压缩信息
       _imageOriginalSize = dw.image?.originalSize;
@@ -667,6 +670,7 @@ source:
         _asciiArt = parsed.asciiArt;
         _currency = parsed.currency;
         _createdAt = parsed.createdAt;
+        _yamlSourceJson = parsed.sourceJson;
 
         // 解析优惠券
         _coupons.clear();
@@ -778,6 +782,9 @@ source:
         note: _noteController.text.isNotEmpty ? _noteController.text : null,
         visualType: _visualType,
         asciiArt: _visualType == 'ascii' ? _asciiArt : null,
+        sourceJson: _isEditing
+            ? _sourceJson
+            : (_yamlSourceJson ?? '{"sourceType":"手动新增"}'),
         isLowestPrice: _isLowestPrice ? 1 : 0,
         createdAt: createdAt,
         updatedAt: now,

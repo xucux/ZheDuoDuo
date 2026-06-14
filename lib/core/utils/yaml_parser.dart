@@ -44,6 +44,8 @@ class ParsedDeal {
   final String? sales;
   /// 创建时间（ISO8601 字符串，可选）
   final DateTime? createdAt;
+  /// 来源信息 JSON（如 '{"sourceType":"手动新增","sourceRemark":null}'）
+  final String? sourceJson;
   /// 标签列表
   final List<String> tags;
   /// 促销权益列表
@@ -69,6 +71,7 @@ class ParsedDeal {
     this.imageUrl,
     this.sales,
     this.createdAt,
+    this.sourceJson,
     this.tags = const [],
     this.promotions = const [],
     this.coupons = const [],
@@ -134,6 +137,7 @@ class YamlParser {
     final promotions = _extractPromotions(map);
     final tags = _extractTags(map, promotions);
     final coupons = _extractCoupons(map, promotions);
+    final sourceJson = _extractSourceJson(map);
 
     return ParsedDeal(
       id: _uuid.v4(),
@@ -153,6 +157,7 @@ class YamlParser {
       imageUrl: imageUrl,
       sales: sales,
       createdAt: createdAt,
+      sourceJson: sourceJson,
       tags: tags,
       promotions: promotions,
       coupons: coupons,
@@ -351,6 +356,37 @@ class YamlParser {
       }
     }
     return coupons;
+  }
+
+  static String? _extractSourceJson(Map<String, dynamic> map) {
+    String? sourceType;
+    String? sourceRemark;
+
+    // 结构化 source.type / source.remark
+    if (map['source'] is Map) {
+      final s = Map<String, dynamic>.from(map['source']);
+      sourceType ??= s['type']?.toString();
+      sourceRemark ??= s['remark']?.toString();
+    }
+
+    // 根级简写
+    sourceType ??= _extractString(map, ['sourceType', '来源类型']);
+    sourceRemark ??= _extractString(map, ['sourceRemark', '来源备注']);
+
+    if (sourceType == null && sourceRemark == null) return null;
+
+    final buffer = StringBuffer();
+    buffer.write('{');
+    if (sourceType != null) {
+      buffer.write('"sourceType":"$sourceType"');
+      if (sourceRemark != null) {
+        buffer.write(',"sourceRemark":"$sourceRemark"');
+      }
+    } else if (sourceRemark != null) {
+      buffer.write('"sourceRemark":"$sourceRemark"');
+    }
+    buffer.write('}');
+    return buffer.toString();
   }
 
   static double _toDouble(dynamic value) {

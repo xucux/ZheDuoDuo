@@ -24,6 +24,7 @@ class Deals extends Table {
   TextColumn get visualType => text().withDefault(const Constant('none'))();
   TextColumn get asciiArt => text().nullable()();
   TextColumn get salesJson => text().nullable()();
+  TextColumn get sourceJson => text().nullable()();
   IntColumn get isLowestPrice => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();

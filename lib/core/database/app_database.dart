@@ -51,7 +51,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -88,6 +88,13 @@ class AppDatabase extends _$AppDatabase {
               await m.addColumn(aiConfigs, aiConfigs.capabilities);
             } catch (_) {
               // 列已存在时忽略（如数据库通过其他方式已更新）
+            }
+          }
+          if (from < 8) {
+            try {
+              await m.addColumn(deals, deals.sourceJson);
+            } catch (_) {
+              // 列已存在时忽略
             }
           }
         },

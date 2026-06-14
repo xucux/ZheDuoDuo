@@ -197,6 +197,7 @@ class DealController {
       visualType: json['visualType'] != null ? json['visualType'] as String : null,
       asciiArt: json['asciiArt'] != null ? Value<String?>(json['asciiArt'] as String?) : const Value<String?>.absent(),
       salesJson: json['salesJson'] != null ? Value<String?>(json['salesJson'] as String?) : const Value<String?>.absent(),
+      sourceJson: json['sourceJson'] != null ? Value<String?>(json['sourceJson'] as String?) : const Value<String?>.absent(),
       updatedAt: DateTime.now(),
     );
 
@@ -260,6 +261,7 @@ class DealController {
       visualType: json['visualType'] ?? 'none',
       asciiArt: json['asciiArt'] as String?,
       salesJson: json['salesJson'] as String?,
+      sourceJson: json['sourceJson'] as String? ?? json['source_json'] as String?,
       isLowestPrice: 0,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : now,
       updatedAt: now,
@@ -312,6 +314,7 @@ class DealController {
       'visualType': deal.visualType,
       'asciiArt': deal.asciiArt,
       'salesJson': deal.salesJson,
+      'sourceJson': deal.sourceJson,
       'isLowestPrice': deal.isLowestPrice,
       'createdAt': deal.createdAt.toIso8601String(),
       'updatedAt': deal.updatedAt.toIso8601String(),

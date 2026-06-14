@@ -23,6 +23,7 @@
 | 优惠券 | `coupons[]` | 由 `promotions` 拆分 | `coupons: []` | `coupons[]` |
 | 30天销量 | — | `sales.sold_30_days` | `sales` | `salesJson`（JSON 字符串） |
 | 历史最低价 | — | — | — | `isLowestPrice`（0/1） |
+| 来源信息 | — | `source.type` / `source.remark` | `sourceType` / `sourceRemark` | `sourceJson`（JSON 字符串） |
 | 备注 | `note` | `note` / `备注` | `note` | `note` |
 | 视觉类型 | `visualType` | `visual.type` | `visualType` | `visualType` |
 | 图片 URL | `imageUrl` | `visual.image_url` | `image_url` / `imageUrl` | 下载后 → `deal_images.image_path` |
@@ -58,6 +59,8 @@
 | `source.platform` | 来源平台 | `string` | `"京东"` | 默认 `"其他"`。一般可以参考的有京东，抖音，拼多多，淘宝，天猫，唯品会，快手，闲鱼，转转等 |
 | `source.logistics` | 物流信息 | `string` | `"京东物流"` | 默认"包邮"，一般参考圆通，中通，顺丰，京东，韵达，极兔，中国邮政，免邮费等 |
 | `source.link` | 购买链接 | `string` | `"https://jd.com/..."` | 回退根级 `link` / `url` / `链接` |
+| `source.type` | 来源类型 | `string` | `"YAML导入"` | 回退根级 `sourceType` / `来源类型` |
+| `source.remark` | 来源备注 | `string` | `"原始文件"` | 回退根级 `sourceRemark` / `来源备注` |
 | `discount` | 折扣描述 | `string` | `"6.6折"` | 使用实际购买到手价和【原价or展示价格】自动计算 |
 | `sales.sold_30_days` | 30天销量 | `string` | `">1000"` | 结构化格式键名可为 `sold_30_days` 或 `sold30Days`；回退根级 `sales`（字符串） |
 | `visual.type` | 视觉类型 | `string` | `"ascii"` | 可选值 `none` / `image` / `ascii`。 |
@@ -187,6 +190,8 @@ source:
   platform: "京东"
   logistics: "京东物流"
   link: "https://..."
+  type: "YAML导入"
+  remark: "某活动页"
 
 visual:
   type: image
@@ -208,6 +213,8 @@ category: 数码
 originalPrice: 8999
 currentPrice: 7499
 discount: "8.3折"
+sourceType: "YAML导入"
+sourceRemark: "某活动页"
 promotions:
   - 百亿补贴
   - 满3000减300
@@ -249,6 +256,7 @@ interface Deal {
   link?: string;                 // 购买链接
   visualType: 'none' | 'image' | 'ascii';
   asciiArt?: string;             // ASCII 艺术图
+  sourceJson?: string;            // 来源信息 JSON，如 {"sourceType":"手动新增","sourceRemark":null}
   // 图片信息存储在 deal_images 表中，非 Deal 字段
   createdAt: string;             // ISO8601
   updatedAt: string;
@@ -304,6 +312,7 @@ CREATE TABLE deals (
   visual_type         TEXT NOT NULL DEFAULT 'none',
   ascii_art           TEXT,
   sales_json          TEXT,                       -- {"sold30Days":">1000"}
+  source_json         TEXT,                       -- {"sourceType":"手动新增","sourceRemark":null}
   is_lowest_price     INTEGER NOT NULL DEFAULT 0,
   created_at          TEXT NOT NULL,
   updated_at          TEXT NOT NULL,

@@ -88,6 +88,11 @@ class ScreenshotParserTool extends McpTool {
         'type': 'string',
         'description': '截图图片路径',
       },
+      'tags': {
+        'type': 'array',
+        'items': {'type': 'string'},
+        'description': '标签列表（如 数码、日用、食品等）',
+      },
     },
     'required': ['title', 'current_price'],
   };
@@ -120,6 +125,7 @@ class ScreenshotParserTool extends McpTool {
       final couponStrength = arguments['coupon_strength'] as String?;
       final couponSource = arguments['coupon_source'] as String?;
       final imagePath = arguments['image_path'] as String?;
+      final tagsRaw = arguments['tags'];
 
       final promotions = (promotionsRaw is List)
           ? promotionsRaw.whereType<String>().toList()
@@ -167,6 +173,16 @@ class ScreenshotParserTool extends McpTool {
             dealId: Value(dealId),
             imagePath: Value(imagePath),
             updatedAt: Value(now),
+          ));
+        }
+
+        final tags = (tagsRaw is List)
+            ? tagsRaw.whereType<String>().where((t) => t.trim().isNotEmpty).toList()
+            : <String>[];
+        for (final tag in tags) {
+          await _db.into(_db.dealTags).insert(DealTagsCompanion(
+            dealId: Value(dealId),
+            tag: Value(tag.trim()),
           ));
         }
       });

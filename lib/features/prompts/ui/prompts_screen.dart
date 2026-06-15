@@ -92,20 +92,22 @@ class _PromptsScreenState extends ConsumerState<PromptsScreen> {
                         icon: Icons.copy,
                         label: '复制',
                       ),
-                      SlidableAction(
-                        onPressed: (_) => _showEditDialog(context, prompt),
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        icon: Icons.edit,
-                        label: '编辑',
-                      ),
-                      SlidableAction(
-                        onPressed: (_) => _confirmDelete(context, prompt),
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        icon: Icons.delete,
-                        label: '删除',
-                      ),
+                      if (prompt.category != 'system')
+                        SlidableAction(
+                          onPressed: (_) => _showEditDialog(context, prompt),
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          icon: Icons.edit,
+                          label: '编辑',
+                        ),
+                      if (prompt.category != 'system')
+                        SlidableAction(
+                          onPressed: (_) => _confirmDelete(context, prompt),
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          icon: Icons.delete,
+                          label: '删除',
+                        ),
                     ],
                   ),
                   child: Container(
@@ -278,7 +280,7 @@ class _PromptsScreenState extends ConsumerState<PromptsScreen> {
                 if (isNew) {
                   await dao.createPrompt(name, content);
                 } else {
-                  await dao.savePrompt(PromptsCompanion(
+                  await dao.updatePrompt(PromptsCompanion(
                     id: Value(prompt.id),
                     name: Value(name),
                     content: Value(content),

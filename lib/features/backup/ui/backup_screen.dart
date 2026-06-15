@@ -629,10 +629,12 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       return;
     }
 
-    final totalSize = deletedEntries.fold<int>(0, (s, e) {
-      final f = File(e.imagePath);
-      return s + (f.existsSync() ? f.lengthSync() : 0);
-    });
+    int totalSize = 0;
+    for (final e in deletedEntries) {
+      final resolved = await ImageUtils.resolveImagePath(e.imagePath);
+      final f = File(resolved);
+      totalSize += f.existsSync() ? f.lengthSync() : 0;
+    }
 
     final confirmed = await showDialog<bool>(
       context: context,

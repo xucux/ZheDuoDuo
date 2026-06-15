@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/daos/deal_dao.dart';
+import 'package:path/path.dart' as p;
 import '../../../core/utils/yaml_parser.dart';
 import '../../../core/utils/image_compress.dart';
 import '../../../core/utils/platform_utils.dart';
 import '../../../shared/theme/antd_colors.dart';
 import '../../../shared/theme/theme_provider.dart';
+import '../../../shared/widgets/tag_input.dart';
 import '../providers/deals_provider.dart';
 
 /// 优惠券表单数据
@@ -63,12 +66,13 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
   final _logisticsController = TextEditingController();
   final _linkController = TextEditingController();
   final _noteController = TextEditingController();
-  final _tagsController = TextEditingController();
+  List<String> _tags = [];
   final _promotionsController = TextEditingController();
   final _yamlController = TextEditingController();
 
   String _visualType = 'none';
   String? _imagePath;
+  String? _resolvedImagePath;
   String? _asciiArt;
   String _currency = '¥';
   bool _isLoading = false;
@@ -116,10 +120,11 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
       _logisticsController.text = dw.deal.logistics ?? '';
       _linkController.text = dw.deal.link ?? '';
       _noteController.text = dw.deal.note ?? '';
-      _tagsController.text = dw.tags.join(', ');
+      _tags = List.from(dw.tags);
       _promotionsController.text = dw.promotions.join('\n');
       _visualType = dw.deal.visualType;
       _imagePath = dw.image?.imagePath;
+      _resolveImagePath();
       _asciiArt = dw.deal.asciiArt;
       _currency = dw.deal.currency;
       _isLowestPrice = dw.deal.isLowestPrice == 1;
@@ -159,7 +164,6 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
     _logisticsController.dispose();
     _linkController.dispose();
     _noteController.dispose();
-    _tagsController.dispose();
     _promotionsController.dispose();
     _yamlController.dispose();
     for (final c in _coupons) {
@@ -267,7 +271,7 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
                   _buildLabel('到手价 *'),
                   TextFormField(
                     controller: _currentPriceController,
-                    decoration: _inputDecoration('1068', prefix: '¥'),
+                    decoration: _inputDecoration('1068', prefix: _currency),
                     keyboardType: TextInputType.number,
                     validator: (v) { if (v == null || v.isEmpty) return '必填'; if (double.tryParse(v) == null) return '无效'; return null; },
                   ),
@@ -277,7 +281,7 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildLabel('原价'),
-                  TextFormField(controller: _originalPriceController, decoration: _inputDecoration('1629', prefix: '¥'), keyboardType: TextInputType.number),
+                  TextFormField(controller: _originalPriceController, decoration: _inputDecoration('1629', prefix: _currency), keyboardType: TextInputType.number),
                 ]),
               ),
             ],
@@ -286,7 +290,7 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
 
           // 展示价
           _buildLabel('展示价'),
-          TextFormField(controller: _displayPriceController, decoration: _inputDecoration('1492.25', prefix: '¥'), keyboardType: TextInputType.number),
+          TextFormField(controller: _displayPriceController, decoration: _inputDecoration('1492.25', prefix: _currency), keyboardType: TextInputType.number),
           const SizedBox(height: 8),
 
           // 史低标识
@@ -303,6 +307,31 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
                 child: const Text('当前为历史最低价', style: TextStyle(fontSize: 13)),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+
+          // 货币
+          _buildLabel('货币'),
+          Row(
+            children: ['¥', '\$', '€', '£', 'HK\$', '₩'].map((c) {
+              final isSelected = _currency == c;
+              return Padding(
+                padding: EdgeInsets.only(right: c != ['¥', '\$', '€', '£', 'HK\$', '₩'].last ? 8 : 0),
+                child: GestureDetector(
+                  onTap: () => setState(() => _currency = c),
+                  child: Container(
+                    height: 36,
+                    width: 52,
+                    decoration: BoxDecoration(
+                      color: isSelected ? AntdColors.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(c, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
           const SizedBox(height: 14),
 
@@ -347,8 +376,48 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
           const SizedBox(height: 14),
 
           // 标签
-          _buildLabel('标签（逗号分隔）'),
-          TextFormField(controller: _tagsController, decoration: _inputDecoration('百亿补贴, 限时')),
+          _buildLabel('标签'),
+          TagInput(
+            initialTags: _tags,
+            onTagsChanged: (tags) {
+              setState(() => _tags = List.from(tags));
+            },
+          ),
+          const SizedBox(height: 14),
+
+          // 创建时间
+          _buildLabel('创建时间（点击修改）'),
+          GestureDetector(
+            onTap: _pickDateTime,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 14, color: Theme.of(context).colorScheme.outline),
+                  const SizedBox(width: 8),
+                  Text(
+                    _createdAt == null ? '自动设为当前时间' : DateFormat('yyyy-MM-dd HH:mm').format(_createdAt!),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _createdAt == null ? Theme.of(context).colorScheme.outline : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  if (_createdAt != null) ...[
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => setState(() => _createdAt = null),
+                      child: Icon(Icons.close, size: 14, color: Theme.of(context).colorScheme.outline),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 14),
 
           // 促销权益
@@ -544,12 +613,19 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
           const SizedBox(height: 10),
           if (_imagePath != null)
             GestureDetector(
-              onTap: () => _openImageViewer(context, _imagePath!),
+              onTap: () {
+                final display = _resolvedImagePath ?? _imagePath!;
+                _openImageViewer(context, display);
+              },
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: Stack(
                   children: [
-                    Image.file(File(_imagePath!), height: 160, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 160, color: theme.colorScheme.surfaceContainerHighest, child: const Center(child: Text('图片加载失败')))),
+                    Image.file(
+                      File(_resolvedImagePath ?? _imagePath!),
+                      height: 160, width: double.infinity, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(height: 160, color: theme.colorScheme.surfaceContainerHighest, child: const Center(child: Text('图片加载失败'))),
+                    ),
                     Positioned(
                       right: 8, bottom: 8,
                       child: Container(
@@ -664,7 +740,7 @@ source:
         _logisticsController.text = parsed.logistics ?? '';
         _linkController.text = parsed.link ?? '';
         _noteController.text = parsed.note ?? '';
-        _tagsController.text = parsed.tags.join(', ');
+        _tags = List.from(parsed.tags);
         _promotionsController.text = parsed.promotions.join('\n');
         _visualType = parsed.visualType;
         _asciiArt = parsed.asciiArt;
@@ -691,6 +767,30 @@ source:
     }
   }
 
+  // ===== Date Time =====
+  Future<void> _pickDateTime() async {
+    final now = DateTime.now();
+    final initialDate = _createdAt ?? now;
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initialDate),
+    );
+    if (time == null || !mounted) return;
+
+    setState(() {
+      _createdAt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    });
+  }
+
   // ===== Image =====
   Future<void> _pickImage(ImageSource source) async {
     // 使用平台适配工具选择图片（桌面端自动回退到文件选择器）
@@ -709,6 +809,15 @@ source:
         _imageCompressedSize = result.compressedSize;
         _imageQuality = result.quality;
       });
+      _resolveImagePath();
+    }
+  }
+
+  Future<void> _resolveImagePath() async {
+    if (_imagePath == null) return;
+    final resolved = await ImageUtils.resolveImagePath(_imagePath!);
+    if (mounted) {
+      setState(() => _resolvedImagePath = resolved);
     }
   }
 
@@ -724,7 +833,7 @@ source:
 
       debugPrint('[DealForm] 开始保存优惠, dealId: $id, isEditing: $_isEditing');
 
-      final tags = _tagsController.text.split(RegExp(r'[,，]')).map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+      final tags = List<String>.from(_tags);
       final promotions = _promotionsController.text.split('\n').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
 
       debugPrint('[DealForm] 标签数: ${tags.length}, 促销数: ${promotions.length}');
@@ -794,11 +903,11 @@ source:
 
       DealImage? dealImage;
       if (_visualType == 'image' && _imagePath != null) {
-        final file = File(_imagePath!);
+        final file = File(_resolvedImagePath ?? _imagePath!);
         if (file.existsSync()) {
           dealImage = DealImage(
             dealId: id,
-            imagePath: _imagePath!,
+            imagePath: p.basename(_imagePath!),
             originalSize: _imageOriginalSize,
             compressedSize: _imageCompressedSize ?? await file.length(),
             quality: _imageQuality,

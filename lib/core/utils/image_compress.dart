@@ -49,7 +49,7 @@ class ImageUtils {
   static const _uuid = Uuid();
 
   /// 获取存储根目录（Android 使用应用外部私有目录）
-  static Future<Directory> _getRootDir() async {
+  static Future<Directory> getRootDir() async {
     if (Platform.isAndroid) {
       final externalDir = await getExternalStorageDirectory();
       if (externalDir != null) {
@@ -59,9 +59,21 @@ class ImageUtils {
     return getApplicationDocumentsDirectory();
   }
 
+  /// 将数据库中存储的图片路径解析为当前设备的绝对路径
+  ///
+  /// 新版数据存储相对路径（如 `images/xxx.jpg`），
+  /// 旧版数据可能存储了绝对路径，保持兼容。
+  static Future<String> resolveImagePath(String path) async {
+    if (path.contains(':\\') || path.startsWith('/') || path.startsWith('\\')) {
+      return path;
+    }
+    final imgDir = await getImagesDirectory();
+    return p.join(imgDir.path, p.basename(path));
+  }
+
   /// 获取图片存储目录
   static Future<Directory> getImagesDirectory() async {
-    final rootDir = await _getRootDir();
+    final rootDir = await getRootDir();
     final imgDir = Directory(p.join(rootDir.path, 'zheduoduo_data', 'images'));
     if (!imgDir.existsSync()) {
       imgDir.createSync(recursive: true);
@@ -153,7 +165,8 @@ class ImageUtils {
 
   /// 删除图片文件
   static Future<void> deleteImage(String imagePath) async {
-    final file = File(imagePath);
+    final resolved = await resolveImagePath(imagePath);
+    final file = File(resolved);
     if (file.existsSync()) {
       await file.delete();
     }
@@ -170,7 +183,8 @@ class ImageUtils {
     int freedBytes = 0;
 
     for (final path in imagePaths) {
-      final file = File(path);
+      final resolved = await resolveImagePath(path);
+      final file = File(resolved);
       if (file.existsSync()) {
         freedBytes += await file.length();
         await file.delete();

@@ -37,9 +37,9 @@ class PromptDao extends DatabaseAccessor<AppDatabase> with _$PromptDaoMixin {
     return query.getSingleOrNull();
   }
 
-  /// 保存提示词（upsert）
-  Future<void> savePrompt(PromptsCompanion entry) async {
-    await into(prompts).insertOnConflictUpdate(entry);
+  /// 更新提示词
+  Future<void> updatePrompt(PromptsCompanion entry) async {
+    await (update(prompts)..where((t) => t.id.equals(entry.id.value))).write(entry);
   }
 
   /// 删除指定提示词

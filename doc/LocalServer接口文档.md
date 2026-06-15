@@ -246,10 +246,28 @@ Authorization: Bearer zheduoduo
 | visualType | string | 视觉类型（`none` / `image` / `ascii`） |
 | asciiArt | string \| null | ASCII 艺术图 |
 | salesJson | string \| null | 销量 JSON |
-| sourceJson | string \| null | 来源信息 JSON |
+| sourceJson | string \| null | 来源信息 JSON，结构见下 `SourceInfo` |
 | isLowestPrice | int | 是否最低价（`0` / `1`） |
 | createdAt | string | 创建时间（ISO8601） |
 | updatedAt | string | 更新时间（ISO8601） |
+
+### SourceInfo（来源信息）
+
+`sourceJson` 序列化后的对象结构：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| sourceType | string | 否 | 来源类型，如 `手动新增`、`YAML导入`、`接口新增` |
+| sourceRemark | string | 否 | 来源备注，如活动页名称、渠道标识等补充说明 |
+
+示例：
+
+```json
+{
+  "sourceType": "手动新增",
+  "sourceRemark": null
+}
+```
 
 ### Coupon（优惠券）
 

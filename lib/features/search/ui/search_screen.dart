@@ -9,10 +9,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/database/daos/deal_dao.dart';
+import '../../../shared/theme/antd_colors.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../deals/providers/deals_provider.dart';
+
+const _kSearchHistoryKey = 'search_history';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -34,7 +39,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Future<void> _loadSearchHistory() async {
-    // TODO: Load from settings
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList(_kSearchHistoryKey);
+    if (saved != null) {
+      setState(() => _searchHistory.addAll(saved));
+    }
+  }
+
+  Future<void> _saveSearchHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_kSearchHistoryKey, _searchHistory);
   }
 
   @override
@@ -71,6 +85,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 _searchHistory.insert(0, value);
                 if (_searchHistory.length > 10) _searchHistory.removeLast();
               });
+              _saveSearchHistory();
             }
           },
         ),
@@ -110,13 +125,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ),
                   );
                 }
-                return ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: deals.length,
-                  itemBuilder: (context, index) {
-                    final dw = deals[index];
-                    return _buildSearchResultCard(context, dw);
-                  },
+                return Column(
+                  children: [
+                    _buildSortBar(context, filters),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        itemCount: deals.length,
+                        itemBuilder: (context, index) {
+                          final dw = deals[index];
+                          return _buildSearchResultCard(context, dw);
+                        },
+                      ),
+                    ),
+                  ],
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -146,6 +168,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               TextButton(
                 onPressed: () {
                   setState(() => _searchHistory.clear());
+                  _saveSearchHistory();
                 },
                 child: const Text('清空'),
               ),
@@ -189,6 +212,67 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           }).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildSortBar(BuildContext context, DealFilters filters) {
+    final theme = Theme.of(context);
+    final isTimeSort = filters.sortBy == 'created_at';
+    final isPriceSort = filters.sortBy == 'price';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Row(
+        children: [
+          _buildSortChip(
+            theme: theme,
+            label: '创建时间',
+            isSelected: isTimeSort,
+            onTap: () {
+              ref.read(dealFiltersProvider.notifier).setSortBy('created_at', ascending: false);
+            },
+          ),
+          const SizedBox(width: 8),
+          _buildSortChip(
+            theme: theme,
+            label: isPriceSort && filters.ascending ? '价格↑' : '价格↓',
+            isSelected: isPriceSort,
+            onTap: () {
+              if (isPriceSort) {
+                ref.read(dealFiltersProvider.notifier).setSortBy('price', ascending: !filters.ascending);
+              } else {
+                ref.read(dealFiltersProvider.notifier).setSortBy('price', ascending: true);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSortChip({
+    required ThemeData theme,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AntdColors.primary : theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: isSelected ? Colors.white : theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 
@@ -254,6 +338,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.error,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('yy-MM-dd HH:mm').format(deal.createdAt),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.outline,
                       ),
                     ),
                   ],

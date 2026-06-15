@@ -170,6 +170,17 @@ class $DealsTable extends Deals with TableInfo<$DealsTable, Deal> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _sourceJsonMeta = const VerificationMeta(
+    'sourceJson',
+  );
+  @override
+  late final GeneratedColumn<String> sourceJson = GeneratedColumn<String>(
+    'source_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isLowestPriceMeta = const VerificationMeta(
     'isLowestPrice',
   );
@@ -267,6 +278,7 @@ class $DealsTable extends Deals with TableInfo<$DealsTable, Deal> {
     visualType,
     asciiArt,
     salesJson,
+    sourceJson,
     isLowestPrice,
     createdAt,
     updatedAt,
@@ -389,6 +401,12 @@ class $DealsTable extends Deals with TableInfo<$DealsTable, Deal> {
         salesJson.isAcceptableOrUnknown(data['sales_json']!, _salesJsonMeta),
       );
     }
+    if (data.containsKey('source_json')) {
+      context.handle(
+        _sourceJsonMeta,
+        sourceJson.isAcceptableOrUnknown(data['source_json']!, _sourceJsonMeta),
+      );
+    }
     if (data.containsKey('is_lowest_price')) {
       context.handle(
         _isLowestPriceMeta,
@@ -507,6 +525,10 @@ class $DealsTable extends Deals with TableInfo<$DealsTable, Deal> {
         DriftSqlType.string,
         data['${effectivePrefix}sales_json'],
       ),
+      sourceJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_json'],
+      ),
       isLowestPrice: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}is_lowest_price'],
@@ -560,6 +582,7 @@ class Deal extends DataClass implements Insertable<Deal> {
   final String visualType;
   final String? asciiArt;
   final String? salesJson;
+  final String? sourceJson;
   final int isLowestPrice;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -583,6 +606,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     required this.visualType,
     this.asciiArt,
     this.salesJson,
+    this.sourceJson,
     required this.isLowestPrice,
     required this.createdAt,
     required this.updatedAt,
@@ -624,6 +648,9 @@ class Deal extends DataClass implements Insertable<Deal> {
     }
     if (!nullToAbsent || salesJson != null) {
       map['sales_json'] = Variable<String>(salesJson);
+    }
+    if (!nullToAbsent || sourceJson != null) {
+      map['source_json'] = Variable<String>(sourceJson);
     }
     map['is_lowest_price'] = Variable<int>(isLowestPrice);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -668,6 +695,9 @@ class Deal extends DataClass implements Insertable<Deal> {
       salesJson: salesJson == null && nullToAbsent
           ? const Value.absent()
           : Value(salesJson),
+      sourceJson: sourceJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceJson),
       isLowestPrice: Value(isLowestPrice),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -703,6 +733,7 @@ class Deal extends DataClass implements Insertable<Deal> {
       visualType: serializer.fromJson<String>(json['visualType']),
       asciiArt: serializer.fromJson<String?>(json['asciiArt']),
       salesJson: serializer.fromJson<String?>(json['salesJson']),
+      sourceJson: serializer.fromJson<String?>(json['sourceJson']),
       isLowestPrice: serializer.fromJson<int>(json['isLowestPrice']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -731,6 +762,7 @@ class Deal extends DataClass implements Insertable<Deal> {
       'visualType': serializer.toJson<String>(visualType),
       'asciiArt': serializer.toJson<String?>(asciiArt),
       'salesJson': serializer.toJson<String?>(salesJson),
+      'sourceJson': serializer.toJson<String?>(sourceJson),
       'isLowestPrice': serializer.toJson<int>(isLowestPrice),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -757,6 +789,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     String? visualType,
     Value<String?> asciiArt = const Value.absent(),
     Value<String?> salesJson = const Value.absent(),
+    Value<String?> sourceJson = const Value.absent(),
     int? isLowestPrice,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -782,6 +815,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     visualType: visualType ?? this.visualType,
     asciiArt: asciiArt.present ? asciiArt.value : this.asciiArt,
     salesJson: salesJson.present ? salesJson.value : this.salesJson,
+    sourceJson: sourceJson.present ? sourceJson.value : this.sourceJson,
     isLowestPrice: isLowestPrice ?? this.isLowestPrice,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -815,6 +849,9 @@ class Deal extends DataClass implements Insertable<Deal> {
           : this.visualType,
       asciiArt: data.asciiArt.present ? data.asciiArt.value : this.asciiArt,
       salesJson: data.salesJson.present ? data.salesJson.value : this.salesJson,
+      sourceJson: data.sourceJson.present
+          ? data.sourceJson.value
+          : this.sourceJson,
       isLowestPrice: data.isLowestPrice.present
           ? data.isLowestPrice.value
           : this.isLowestPrice,
@@ -845,6 +882,7 @@ class Deal extends DataClass implements Insertable<Deal> {
           ..write('visualType: $visualType, ')
           ..write('asciiArt: $asciiArt, ')
           ..write('salesJson: $salesJson, ')
+          ..write('sourceJson: $sourceJson, ')
           ..write('isLowestPrice: $isLowestPrice, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -873,6 +911,7 @@ class Deal extends DataClass implements Insertable<Deal> {
     visualType,
     asciiArt,
     salesJson,
+    sourceJson,
     isLowestPrice,
     createdAt,
     updatedAt,
@@ -900,6 +939,7 @@ class Deal extends DataClass implements Insertable<Deal> {
           other.visualType == this.visualType &&
           other.asciiArt == this.asciiArt &&
           other.salesJson == this.salesJson &&
+          other.sourceJson == this.sourceJson &&
           other.isLowestPrice == this.isLowestPrice &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -925,6 +965,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
   final Value<String> visualType;
   final Value<String?> asciiArt;
   final Value<String?> salesJson;
+  final Value<String?> sourceJson;
   final Value<int> isLowestPrice;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -949,6 +990,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     this.visualType = const Value.absent(),
     this.asciiArt = const Value.absent(),
     this.salesJson = const Value.absent(),
+    this.sourceJson = const Value.absent(),
     this.isLowestPrice = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -974,6 +1016,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     this.visualType = const Value.absent(),
     this.asciiArt = const Value.absent(),
     this.salesJson = const Value.absent(),
+    this.sourceJson = const Value.absent(),
     this.isLowestPrice = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
@@ -1003,6 +1046,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     Expression<String>? visualType,
     Expression<String>? asciiArt,
     Expression<String>? salesJson,
+    Expression<String>? sourceJson,
     Expression<int>? isLowestPrice,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -1028,6 +1072,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
       if (visualType != null) 'visual_type': visualType,
       if (asciiArt != null) 'ascii_art': asciiArt,
       if (salesJson != null) 'sales_json': salesJson,
+      if (sourceJson != null) 'source_json': sourceJson,
       if (isLowestPrice != null) 'is_lowest_price': isLowestPrice,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1055,6 +1100,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     Value<String>? visualType,
     Value<String?>? asciiArt,
     Value<String?>? salesJson,
+    Value<String?>? sourceJson,
     Value<int>? isLowestPrice,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -1080,6 +1126,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
       visualType: visualType ?? this.visualType,
       asciiArt: asciiArt ?? this.asciiArt,
       salesJson: salesJson ?? this.salesJson,
+      sourceJson: sourceJson ?? this.sourceJson,
       isLowestPrice: isLowestPrice ?? this.isLowestPrice,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1139,6 +1186,9 @@ class DealsCompanion extends UpdateCompanion<Deal> {
     if (salesJson.present) {
       map['sales_json'] = Variable<String>(salesJson.value);
     }
+    if (sourceJson.present) {
+      map['source_json'] = Variable<String>(sourceJson.value);
+    }
     if (isLowestPrice.present) {
       map['is_lowest_price'] = Variable<int>(isLowestPrice.value);
     }
@@ -1184,6 +1234,7 @@ class DealsCompanion extends UpdateCompanion<Deal> {
           ..write('visualType: $visualType, ')
           ..write('asciiArt: $asciiArt, ')
           ..write('salesJson: $salesJson, ')
+          ..write('sourceJson: $sourceJson, ')
           ..write('isLowestPrice: $isLowestPrice, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -5907,7 +5958,7 @@ class $PromptsTable extends Prompts with TableInfo<$PromptsTable, Prompt> {
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => const {};
+  Set<GeneratedColumn> get $primaryKey => {id};
   @override
   Prompt map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
@@ -6563,6 +6614,7 @@ typedef $$DealsTableCreateCompanionBuilder =
       Value<String> visualType,
       Value<String?> asciiArt,
       Value<String?> salesJson,
+      Value<String?> sourceJson,
       Value<int> isLowestPrice,
       required DateTime createdAt,
       required DateTime updatedAt,
@@ -6589,6 +6641,7 @@ typedef $$DealsTableUpdateCompanionBuilder =
       Value<String> visualType,
       Value<String?> asciiArt,
       Value<String?> salesJson,
+      Value<String?> sourceJson,
       Value<int> isLowestPrice,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -6679,6 +6732,11 @@ class $$DealsTableFilterComposer extends Composer<_$AppDatabase, $DealsTable> {
 
   ColumnFilters<String> get salesJson => $composableBuilder(
     column: $table.salesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceJson => $composableBuilder(
+    column: $table.sourceJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6802,6 +6860,11 @@ class $$DealsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get sourceJson => $composableBuilder(
+    column: $table.sourceJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get isLowestPrice => $composableBuilder(
     column: $table.isLowestPrice,
     builder: (column) => ColumnOrderings(column),
@@ -6900,6 +6963,11 @@ class $$DealsTableAnnotationComposer
   GeneratedColumn<String> get salesJson =>
       $composableBuilder(column: $table.salesJson, builder: (column) => column);
 
+  GeneratedColumn<String> get sourceJson => $composableBuilder(
+    column: $table.sourceJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get isLowestPrice => $composableBuilder(
     column: $table.isLowestPrice,
     builder: (column) => column,
@@ -6967,6 +7035,7 @@ class $$DealsTableTableManager
                 Value<String> visualType = const Value.absent(),
                 Value<String?> asciiArt = const Value.absent(),
                 Value<String?> salesJson = const Value.absent(),
+                Value<String?> sourceJson = const Value.absent(),
                 Value<int> isLowestPrice = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -6991,6 +7060,7 @@ class $$DealsTableTableManager
                 visualType: visualType,
                 asciiArt: asciiArt,
                 salesJson: salesJson,
+                sourceJson: sourceJson,
                 isLowestPrice: isLowestPrice,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -7017,6 +7087,7 @@ class $$DealsTableTableManager
                 Value<String> visualType = const Value.absent(),
                 Value<String?> asciiArt = const Value.absent(),
                 Value<String?> salesJson = const Value.absent(),
+                Value<String?> sourceJson = const Value.absent(),
                 Value<int> isLowestPrice = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
@@ -7041,6 +7112,7 @@ class $$DealsTableTableManager
                 visualType: visualType,
                 asciiArt: asciiArt,
                 salesJson: salesJson,
+                sourceJson: sourceJson,
                 isLowestPrice: isLowestPrice,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

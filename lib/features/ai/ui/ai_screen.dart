@@ -432,6 +432,14 @@ class _AiScreenState extends ConsumerState<AiScreen> {
                       color: theme.colorScheme.outline,
                     ),
                   ),
+                  if (ref.read(mcpEnabledProvider))
+                    Text(
+                      ' · MCP:${ref.read(mcpToolSettingsProvider).where((t) => t.enabled).length}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -52,6 +53,19 @@ class DealDetailScreen extends ConsumerWidget {
     final hasDiscount = deal.originalPrice != null &&
         deal.originalPrice! > deal.currentPrice;
 
+    // 解析来源信息
+    String? sourceType;
+    String? sourceRemark;
+    if (deal.sourceJson != null && deal.sourceJson!.isNotEmpty) {
+      try {
+        final sourceMap = jsonDecode(deal.sourceJson!) as Map<String, dynamic>;
+        sourceType = sourceMap['sourceType'] as String?;
+        sourceRemark = sourceMap['sourceRemark'] as String?;
+      } catch (_) {
+        // 解析失败时忽略
+      }
+    }
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -62,14 +76,25 @@ class DealDetailScreen extends ConsumerWidget {
             flexibleSpace: FlexibleSpaceBar(
               background: deal.visualType == 'image' && dw.image != null
                   ? GestureDetector(
-                      onTap: () => _openImageViewer(context, dw.image!.imagePath),
+                      onTap: () {
+                        ImageUtils.resolveImagePath(dw.image!.imagePath).then((p) {
+                          if (context.mounted) _openImageViewer(context, p);
+                        });
+                      },
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          Image.file(
-                            File(dw.image!.imagePath),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _buildPlaceholder(context),
+                          FutureBuilder<String>(
+                            future: ImageUtils.resolveImagePath(dw.image!.imagePath),
+                            builder: (context, snapshot) {
+                              final path = snapshot.data;
+                              if (path == null) return _buildPlaceholder(context);
+                              return Image.file(
+                                File(path),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildPlaceholder(context),
+                              );
+                            },
                           ),
                           const DecoratedBox(
                             decoration: BoxDecoration(
@@ -208,12 +233,20 @@ class DealDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
 
                   // Title
-                  Text(
-                    deal.title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
+                  GestureDetector(
+                    onLongPress: () {
+                      Clipboard.setData(ClipboardData(text: deal.title));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('标题已复制')),
+                      );
+                    },
+                    child: Text(
+                      deal.title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        height: 1.3,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -443,6 +476,10 @@ class DealDetailScreen extends ConsumerWidget {
                   Card(
                     child: Column(
                       children: [
+                        if (sourceType != null && sourceType.isNotEmpty)
+                          _buildInfoRow(context, '来源类型', sourceType),
+                        if (sourceRemark != null && sourceRemark.isNotEmpty)
+                          _buildInfoRow(context, '来源备注', sourceRemark),
                         if (deal.logistics != null)
                           _buildInfoRow(context, '物流', deal.logistics!),
                         _buildInfoRow(context, '创建时间',
@@ -558,6 +595,12 @@ class DealDetailScreen extends ConsumerWidget {
           ),
           Expanded(
             child: GestureDetector(
+              onLongPress: () {
+                Clipboard.setData(ClipboardData(text: value));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$label 已复制')),
+                );
+              },
               onTap: isLink
                   ? () async {
                       final uri = Uri.parse(value);

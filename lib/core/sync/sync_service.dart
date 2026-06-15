@@ -169,7 +169,8 @@ class SyncService {
                   ..where((t) => t.deleted.equals(0)))
                 .getSingleOrNull();
             if (img != null) {
-              final file = File(img.imagePath);
+              final resolved = await ImageUtils.resolveImagePath(img.imagePath);
+              final file = File(resolved);
               if (file.existsSync()) {
                 await transport.upload(
                   _imagePath(entry.entityId, dirPrefix: dirPrefix),
@@ -441,9 +442,9 @@ class SyncService {
                 try {
                   final remoteImgPath = _imagePath(deal.id, dirPrefix: dirPrefix);
                   final imgData = await transport.download(remoteImgPath);
-                  final localPath = p.join(imgDir.path, '${deal.id}.jpg');
-                  await File(localPath).writeAsBytes(imgData);
-                  image = DealImage.fromJson(imageJson).copyWith(imagePath: localPath);
+                  final absPath = p.join(imgDir.path, '${deal.id}.jpg');
+                  await File(absPath).writeAsBytes(imgData);
+                  image = DealImage.fromJson(imageJson).copyWith(imagePath: '${deal.id}.jpg');
                 } catch (e) {
                   AppLogger.instance.e('[Sync] 下载图片失败: ${deal.id}', e);
                   // 图片下载失败仍继续保存 deal，只是没有图片

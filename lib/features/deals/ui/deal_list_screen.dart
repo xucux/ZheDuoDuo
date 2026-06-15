@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../../../core/database/daos/deal_dao.dart';
+import '../../../core/utils/image_compress.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../providers/deals_provider.dart';
 
@@ -333,12 +334,19 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
                     if (dw.image != null)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
-                        child: Image.file(
-                          File(dw.image!.imagePath),
-                          width: 48,
-                          height: 48,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox(width: 48, height: 48),
+                        child: FutureBuilder<String>(
+                          future: ImageUtils.resolveImagePath(dw.image!.imagePath),
+                          builder: (context, snapshot) {
+                            final path = snapshot.data;
+                            if (path == null) return const SizedBox(width: 48, height: 48);
+                            return Image.file(
+                              File(path),
+                              width: 48,
+                              height: 48,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox(width: 48, height: 48),
+                            );
+                          },
                         ),
                       )
                     else if (deal.asciiArt != null && deal.asciiArt!.isNotEmpty)
@@ -641,6 +649,7 @@ class _FilterSheet extends ConsumerStatefulWidget {
 
 class _FilterSheetState extends ConsumerState<_FilterSheet> {
   bool _tagsExpanded = false;
+  bool _categoriesExpanded = false;
 
   Future<void> _pickCustomDateRange() async {
     final now = DateTime.now();
@@ -688,13 +697,36 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
           error: (_, __) => const SizedBox.shrink(),
         ),
         const SizedBox(height: 16),
-        Text('分类', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: theme.colorScheme.onSurface)),
+        GestureDetector(
+          onTap: () => setState(() => _categoriesExpanded = !_categoriesExpanded),
+          child: Row(
+            children: [
+              Text('分类', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: theme.colorScheme.onSurface)),
+              const SizedBox(width: 4),
+              Icon(_categoriesExpanded ? Icons.expand_less : Icons.expand_more, size: 16, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
         const SizedBox(height: 8),
         categoriesAsync.when(
-          data: (categories) => Wrap(spacing: 8, runSpacing: 6, children: [
-            _buildSheetChip(context, ref, '全部', selected: filters.category == null, onTap: () => ref.read(dealFiltersProvider.notifier).setCategory(null)),
-            ...categories.map((c) => _buildSheetChip(context, ref, c, selected: filters.category == c, onTap: () => ref.read(dealFiltersProvider.notifier).setCategory(c))),
-          ]),
+          data: (categories) {
+            const maxCollapsed = 15;
+            final showAll = _categoriesExpanded || categories.length <= maxCollapsed;
+            final displayCategories = showAll ? categories : categories.take(maxCollapsed).toList();
+            return Wrap(spacing: 8, runSpacing: 6, children: [
+              _buildSheetChip(context, ref, '全部', selected: filters.category == null, onTap: () => ref.read(dealFiltersProvider.notifier).setCategory(null)),
+              ...displayCategories.map((c) => _buildSheetChip(context, ref, c, selected: filters.category == c, onTap: () => ref.read(dealFiltersProvider.notifier).setCategory(c))),
+              if (!showAll)
+                GestureDetector(
+                  onTap: () => setState(() => _categoriesExpanded = true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16)),
+                    child: Text('+${categories.length - maxCollapsed}', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+                  ),
+                ),
+            ]);
+          },
           loading: () => const SizedBox.shrink(),
           error: (_, __) => const SizedBox.shrink(),
         ),

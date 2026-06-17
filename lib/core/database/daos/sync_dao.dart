@@ -70,12 +70,17 @@ class SyncDao extends DatabaseAccessor<AppDatabase> {
     return meta?.deviceId;
   }
 
-  /// 记录一条新的数据变更日志
-  ///
-  /// [deviceId] 设备 ID，[entityType] 实体类型（如 deal），
-  /// [entityId] 实体 ID，[operation] 操作类型（insert/update/delete），
-  /// [revision] 变更版本号。
-  Future<void> logChange(String deviceId, String entityType, String entityId, String operation, int revision) async {
+  /// 记录一条新的数据变更日志（新版，支持附件和 Payload）
+  Future<void> logChange({
+    required String deviceId,
+    required String entityType,
+    required String entityId,
+    required String operation,
+    required int revision,
+    int hasAttachment = 0,
+    String? attachmentPaths,
+    String? payload,
+  }) async {
     await into(attachedDatabase.syncChangelog).insert(SyncChangelogCompanion.insert(
       deviceId: deviceId,
       entityType: entityType,
@@ -83,11 +88,27 @@ class SyncDao extends DatabaseAccessor<AppDatabase> {
       operation: operation,
       revision: revision,
       changedAt: DateTime.now(),
+      hasAttachment: Value(hasAttachment),
+      attachmentPaths: Value(attachmentPaths),
+      payload: Value(payload),
     ));
+  }
+
+  /// 批量标记变更日志为已同步
+  Future<void> markSyncedBatch(List<int> ids) async {
+    if (ids.isEmpty) return;
+    await (update(attachedDatabase.syncChangelog)
+          ..where((t) => t.id.isIn(ids)))
+        .write(SyncChangelogCompanion(syncedAt: Value(DateTime.now())));
   }
 
   /// 删除已同步的变更日志记录（防止表无限增长）
   Future<int> purgeSyncedChanges() async {
     return (delete(attachedDatabase.syncChangelog)..where((t) => t.syncedAt.isNotNull())).go();
+  }
+
+  /// 清空所有变更日志（全量上传后调用）
+  Future<int> purgeAllChanges() async {
+    return delete(attachedDatabase.syncChangelog).go();
   }
 }

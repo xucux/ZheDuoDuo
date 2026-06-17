@@ -8,6 +8,7 @@
 import 'package:drift/drift.dart';
 import '../app_database.dart';
 import '../tables/app_settings.dart';
+import '../../sync/change_logger.dart';
 
 part 'settings_dao.g.dart';
 
@@ -16,7 +17,9 @@ part 'settings_dao.g.dart';
 /// 以键值对形式存取应用配置，如主题、排序、货币等。
 @DriftAccessor(tables: [AppSettings])
 class SettingsDao extends DatabaseAccessor<AppDatabase> with _$SettingsDaoMixin {
-  SettingsDao(super.db);
+  final ChangeLogger? _changeLogger;
+
+  SettingsDao(super.db, [this._changeLogger]);
 
   /// Get a setting value by key
   Future<String?> getValue(String key) async {
@@ -34,11 +37,13 @@ class SettingsDao extends DatabaseAccessor<AppDatabase> with _$SettingsDaoMixin 
         updatedAt: DateTime.now(),
       ),
     );
+    await _changeLogger?.logSetting(key, 'upsert', payload: {'value': value});
   }
 
   /// Remove a setting
   Future<void> removeValue(String key) async {
     await (delete(appSettings)..where((t) => t.key.equals(key))).go();
+    await _changeLogger?.logSetting(key, 'delete');
   }
 
   /// Watch a setting value

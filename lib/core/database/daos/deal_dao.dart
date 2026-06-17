@@ -7,6 +7,7 @@
 // - 软删除/硬删除/恢复优惠
 // - 获取所有平台/分类/标签/数量统计
 
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import '../app_database.dart';
 import '../tables/deals.dart';
@@ -15,6 +16,7 @@ import '../tables/deal_promotions.dart';
 import '../tables/coupons.dart';
 import '../tables/deal_images.dart';
 import 'sync_dao.dart';
+import '../../sync/change_logger.dart';
 
 part 'deal_dao.g.dart';
 
@@ -43,17 +45,32 @@ class DealWithDetails {
 @DriftAccessor(tables: [Deals, DealTags, DealPromotions, Coupons, DealImages])
 class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
   final SyncDao? _syncDao;
+  final ChangeLogger? _changeLogger;
 
-  DealDao(super.db, [this._syncDao]);
+  DealDao(super.db, [this._syncDao, this._changeLogger]);
 
   /// 记录 deal 变更到 sync_changelog（用于增量同步）
-  Future<void> _logChange(String entityId, String operation) async {
+  Future<void> _logChange(String entityId, String operation, {List<String>? imagePaths}) async {
+    final logger = _changeLogger;
+    if (logger != null) {
+      await logger.logDeal(entityId, operation, imagePaths: imagePaths);
+      return;
+    }
+    // 兼容旧方式
     final syncDao = _syncDao;
     if (syncDao == null) return;
     final deviceId = await syncDao.getDeviceIdOrNull();
     if (deviceId == null || deviceId.isEmpty) return;
     final revision = await syncDao.nextRevision();
-    await syncDao.logChange(deviceId, 'deal', entityId, operation, revision);
+    await syncDao.logChange(
+      deviceId: deviceId,
+      entityType: 'deals',
+      entityId: entityId,
+      operation: operation,
+      revision: revision,
+      hasAttachment: (imagePaths != null && imagePaths.isNotEmpty) ? 1 : 0,
+      attachmentPaths: imagePaths != null ? jsonEncode(imagePaths) : null,
+    );
   }
 
   /// Watch all deals with filters
@@ -172,6 +189,7 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
   /// Insert or update a deal with all related data
   Future<void> saveDeal(DealWithDetails dealWithDetails) async {
     final deal = dealWithDetails.deal;
+    List<String>? imagePaths;
     await transaction(() async {
       // Upsert deal
       await into(deals).insertOnConflictUpdate(deal);
@@ -225,6 +243,7 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
       // Upsert or mark deleted image
       if (dealWithDetails.image != null) {
         await into(dealImages).insertOnConflictUpdate(dealWithDetails.image!);
+        imagePaths = [dealWithDetails.image!.imagePath];
       } else {
         final existing = await (select(dealImages)..where((t) => t.dealId.equals(deal.id))).getSingleOrNull();
         if (existing != null && existing.deleted == 0) {
@@ -238,7 +257,7 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
       }
     });
     // 记录变更日志（事务外，避免影响主事务性能）
-    await _logChange(deal.id, 'upsert');
+    await _logChange(deal.id, 'upsert', imagePaths: imagePaths);
   }
 
   /// Soft delete a deal (pending_delete)
@@ -271,6 +290,10 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
   /// Hard delete a deal
   Future<void> hardDeleteDeal(String id) async {
     await (delete(deals)..where((t) => t.id.equals(id))).go();
+    await (delete(dealTags)..where((t) => t.dealId.equals(id))).go();
+    await (delete(dealPromotions)..where((t) => t.dealId.equals(id))).go();
+    await (delete(coupons)..where((t) => t.dealId.equals(id))).go();
+    await (delete(dealImages)..where((t) => t.dealId.equals(id))).go();
     await _logChange(id, 'delete');
   }
 

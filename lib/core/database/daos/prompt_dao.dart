@@ -9,6 +9,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../app_database.dart';
 import '../tables/prompts.dart';
+import '../../sync/change_logger.dart';
 
 part 'prompt_dao.g.dart';
 
@@ -17,9 +18,10 @@ part 'prompt_dao.g.dart';
 /// 管理 AI 提示词模板的 CRUD 操作，支持系统预设和用户自定义提示词。
 @DriftAccessor(tables: [Prompts])
 class PromptDao extends DatabaseAccessor<AppDatabase> with _$PromptDaoMixin {
-  PromptDao(super.db);
-
   static const _uuid = Uuid();
+  final ChangeLogger? _changeLogger;
+
+  PromptDao(super.db, [this._changeLogger]);
 
   /// 获取所有提示词（按 sortOrder 升序）
   Future<List<Prompt>> getAllPrompts() async {
@@ -40,11 +42,13 @@ class PromptDao extends DatabaseAccessor<AppDatabase> with _$PromptDaoMixin {
   /// 更新提示词
   Future<void> updatePrompt(PromptsCompanion entry) async {
     await (update(prompts)..where((t) => t.id.equals(entry.id.value))).write(entry);
+    await _changeLogger?.logPrompt(entry.id.value, 'update');
   }
 
   /// 删除指定提示词
   Future<void> deletePrompt(String id) async {
     await (delete(prompts)..where((t) => t.id.equals(id))).go();
+    await _changeLogger?.logPrompt(id, 'delete');
   }
 
   /// 创建新提示词，返回生成的 ID
@@ -58,6 +62,7 @@ class PromptDao extends DatabaseAccessor<AppDatabase> with _$PromptDaoMixin {
       createdAt: now,
       updatedAt: now,
     ));
+    await _changeLogger?.logPrompt(id, 'insert');
     return id;
   }
 

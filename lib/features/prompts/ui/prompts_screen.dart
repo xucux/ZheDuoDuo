@@ -11,7 +11,8 @@ import '../../../shared/theme/antd_colors.dart';
 
 final promptDaoProvider = Provider<PromptDao>((ref) {
   final db = ref.watch(databaseProvider);
-  return PromptDao(db);
+  final logger = ref.watch(changeLoggerProvider);
+  return PromptDao(db, logger);
 });
 
 final promptsProvider = StreamProvider<List<Prompt>>((ref) {

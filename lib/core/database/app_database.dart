@@ -51,7 +51,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -96,6 +96,12 @@ class AppDatabase extends _$AppDatabase {
             } catch (_) {
               // 列已存在时忽略
             }
+          }
+          if (from < 9) {
+            // 扩展 sync_changelog 表：新增附件标记和数据快照字段
+            await customStatement('ALTER TABLE sync_changelog ADD COLUMN has_attachment INTEGER NOT NULL DEFAULT 0');
+            await customStatement('ALTER TABLE sync_changelog ADD COLUMN attachment_paths TEXT');
+            await customStatement('ALTER TABLE sync_changelog ADD COLUMN payload TEXT');
           }
         },
       );

@@ -9,6 +9,7 @@
 import 'package:drift/drift.dart';
 import '../app_database.dart';
 import '../tables/ai_configs.dart';
+import '../../sync/change_logger.dart';
 
 part 'ai_config_dao.g.dart';
 
@@ -17,7 +18,9 @@ part 'ai_config_dao.g.dart';
 /// 管理 AI 对话配置方案的 CRUD 操作。
 @DriftAccessor(tables: [AiConfigs])
 class AiConfigDao extends DatabaseAccessor<AppDatabase> with _$AiConfigDaoMixin {
-  AiConfigDao(super.db);
+  final ChangeLogger? _changeLogger;
+
+  AiConfigDao(super.db, [this._changeLogger]);
 
   /// 获取当前激活的 AI 配置
   ///
@@ -48,6 +51,7 @@ class AiConfigDao extends DatabaseAccessor<AppDatabase> with _$AiConfigDaoMixin 
           .write(const AiConfigsCompanion(isActive: Value(0)));
     }
     await into(aiConfigs).insertOnConflictUpdate(config);
+    await _changeLogger?.logAiConfig(config.id.value, 'upsert');
   }
 
   /// 激活指定配置
@@ -60,11 +64,13 @@ class AiConfigDao extends DatabaseAccessor<AppDatabase> with _$AiConfigDaoMixin 
       await (update(aiConfigs)..where((t) => t.id.equals(id)))
           .write(const AiConfigsCompanion(isActive: Value(1)));
     });
+    await _changeLogger?.logAiConfig(id, 'update', payload: {'isActive': 1});
   }
 
   /// 删除指定配置
   Future<void> deleteConfig(String id) async {
     await (delete(aiConfigs)..where((t) => t.id.equals(id))).go();
+    await _changeLogger?.logAiConfig(id, 'delete');
   }
 
   /// 获取指定 ID 的配置

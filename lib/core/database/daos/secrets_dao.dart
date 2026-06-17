@@ -9,6 +9,7 @@
 import 'package:drift/drift.dart';
 import '../app_database.dart';
 import '../tables/secrets.dart';
+import '../../sync/change_logger.dart';
 
 part 'secrets_dao.g.dart';
 
@@ -17,7 +18,9 @@ part 'secrets_dao.g.dart';
 /// 管理所有敏感凭证的 CRUD 操作，支持按类别和关联实体查询。
 @DriftAccessor(tables: [Secrets])
 class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
-  SecretsDao(super.db);
+  final ChangeLogger? _changeLogger;
+
+  SecretsDao(super.db, [this._changeLogger]);
 
   /// 获取指定类别和键名的密钥值
   ///
@@ -43,6 +46,7 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
   /// [entityId] 可选，用于区分不同实体的同类型密钥。
   Future<void> setValue(String category, String keyName, String keyValue, {String? entityId, String? note}) async {
     final existing = await getValue(category, keyName, entityId: entityId);
+    final compositeKey = entityId != null ? '$category|$keyName|$entityId' : '$category|$keyName';
     if (existing != null) {
       await (update(secrets)..where((t) {
         var condition = t.category.equals(category) & t.keyName.equals(keyName);
@@ -69,12 +73,14 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
         updatedAt: DateTime.now(),
       ));
     }
+    await _changeLogger?.logSecret(compositeKey, 'upsert');
   }
 
   /// 删除指定类别和键名的密钥
   ///
   /// [entityId] 可选，仅删除匹配该实体的密钥。
   Future<void> deleteValue(String category, String keyName, {String? entityId}) async {
+    final compositeKey = entityId != null ? '$category|$keyName|$entityId' : '$category|$keyName';
     await (delete(secrets)..where((t) {
       var condition = t.category.equals(category) & t.keyName.equals(keyName);
       if (entityId != null) {
@@ -84,6 +90,7 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
       }
       return condition;
     })).go();
+    await _changeLogger?.logSecret(compositeKey, 'delete');
   }
 
   /// 获取指定类别的所有密钥
@@ -98,12 +105,22 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
 
   /// 删除指定类别的所有密钥
   Future<void> deleteByCategory(String category) async {
+    final records = await getByCategory(category);
     await (delete(secrets)..where((t) => t.category.equals(category))).go();
+    for (final r in records) {
+      final compositeKey = r.entityId != null ? '${r.category}|${r.keyName}|${r.entityId}' : '${r.category}|${r.keyName}';
+      await _changeLogger?.logSecret(compositeKey, 'delete');
+    }
   }
 
   /// 删除指定关联实体的所有密钥
   Future<void> deleteByEntityId(String entityId) async {
+    final records = await getByEntityId(entityId);
     await (delete(secrets)..where((t) => t.entityId.equals(entityId))).go();
+    for (final r in records) {
+      final compositeKey = r.entityId != null ? '${r.category}|${r.keyName}|${r.entityId}' : '${r.category}|${r.keyName}';
+      await _changeLogger?.logSecret(compositeKey, 'delete');
+    }
   }
 
   /// 获取指定类别和键名的密钥记录（含完整信息）

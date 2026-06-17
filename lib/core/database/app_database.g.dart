@@ -3606,12 +3606,35 @@ class $SyncChangelogTable extends SyncChangelog
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _payloadHashMeta = const VerificationMeta(
-    'payloadHash',
+  static const VerificationMeta _hasAttachmentMeta = const VerificationMeta(
+    'hasAttachment',
   );
   @override
-  late final GeneratedColumn<String> payloadHash = GeneratedColumn<String>(
-    'payload_hash',
+  late final GeneratedColumn<int> hasAttachment = GeneratedColumn<int>(
+    'has_attachment',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _attachmentPathsMeta = const VerificationMeta(
+    'attachmentPaths',
+  );
+  @override
+  late final GeneratedColumn<String> attachmentPaths = GeneratedColumn<String>(
+    'attachment_paths',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
+  @override
+  late final GeneratedColumn<String> payload = GeneratedColumn<String>(
+    'payload',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -3627,7 +3650,9 @@ class $SyncChangelogTable extends SyncChangelog
     revision,
     changedAt,
     syncedAt,
-    payloadHash,
+    hasAttachment,
+    attachmentPaths,
+    payload,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3698,13 +3723,28 @@ class $SyncChangelogTable extends SyncChangelog
         syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta),
       );
     }
-    if (data.containsKey('payload_hash')) {
+    if (data.containsKey('has_attachment')) {
       context.handle(
-        _payloadHashMeta,
-        payloadHash.isAcceptableOrUnknown(
-          data['payload_hash']!,
-          _payloadHashMeta,
+        _hasAttachmentMeta,
+        hasAttachment.isAcceptableOrUnknown(
+          data['has_attachment']!,
+          _hasAttachmentMeta,
         ),
+      );
+    }
+    if (data.containsKey('attachment_paths')) {
+      context.handle(
+        _attachmentPathsMeta,
+        attachmentPaths.isAcceptableOrUnknown(
+          data['attachment_paths']!,
+          _attachmentPathsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('payload')) {
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
       );
     }
     return context;
@@ -3748,9 +3788,17 @@ class $SyncChangelogTable extends SyncChangelog
         DriftSqlType.dateTime,
         data['${effectivePrefix}synced_at'],
       ),
-      payloadHash: attachedDatabase.typeMapping.read(
+      hasAttachment: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}has_attachment'],
+      )!,
+      attachmentPaths: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}payload_hash'],
+        data['${effectivePrefix}attachment_paths'],
+      ),
+      payload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload'],
       ),
     );
   }
@@ -3771,7 +3819,15 @@ class SyncChangelogData extends DataClass
   final int revision;
   final DateTime changedAt;
   final DateTime? syncedAt;
-  final String? payloadHash;
+
+  /// 是否涉及附件（1=是，0=否）
+  final int hasAttachment;
+
+  /// 附件本地路径列表，JSON 数组格式
+  final String? attachmentPaths;
+
+  /// 变更后数据快照（JSON）。DELETE 时可为空
+  final String? payload;
   const SyncChangelogData({
     required this.id,
     required this.deviceId,
@@ -3781,7 +3837,9 @@ class SyncChangelogData extends DataClass
     required this.revision,
     required this.changedAt,
     this.syncedAt,
-    this.payloadHash,
+    required this.hasAttachment,
+    this.attachmentPaths,
+    this.payload,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3796,8 +3854,12 @@ class SyncChangelogData extends DataClass
     if (!nullToAbsent || syncedAt != null) {
       map['synced_at'] = Variable<DateTime>(syncedAt);
     }
-    if (!nullToAbsent || payloadHash != null) {
-      map['payload_hash'] = Variable<String>(payloadHash);
+    map['has_attachment'] = Variable<int>(hasAttachment);
+    if (!nullToAbsent || attachmentPaths != null) {
+      map['attachment_paths'] = Variable<String>(attachmentPaths);
+    }
+    if (!nullToAbsent || payload != null) {
+      map['payload'] = Variable<String>(payload);
     }
     return map;
   }
@@ -3814,9 +3876,13 @@ class SyncChangelogData extends DataClass
       syncedAt: syncedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(syncedAt),
-      payloadHash: payloadHash == null && nullToAbsent
+      hasAttachment: Value(hasAttachment),
+      attachmentPaths: attachmentPaths == null && nullToAbsent
           ? const Value.absent()
-          : Value(payloadHash),
+          : Value(attachmentPaths),
+      payload: payload == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payload),
     );
   }
 
@@ -3834,7 +3900,9 @@ class SyncChangelogData extends DataClass
       revision: serializer.fromJson<int>(json['revision']),
       changedAt: serializer.fromJson<DateTime>(json['changedAt']),
       syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
-      payloadHash: serializer.fromJson<String?>(json['payloadHash']),
+      hasAttachment: serializer.fromJson<int>(json['hasAttachment']),
+      attachmentPaths: serializer.fromJson<String?>(json['attachmentPaths']),
+      payload: serializer.fromJson<String?>(json['payload']),
     );
   }
   @override
@@ -3849,7 +3917,9 @@ class SyncChangelogData extends DataClass
       'revision': serializer.toJson<int>(revision),
       'changedAt': serializer.toJson<DateTime>(changedAt),
       'syncedAt': serializer.toJson<DateTime?>(syncedAt),
-      'payloadHash': serializer.toJson<String?>(payloadHash),
+      'hasAttachment': serializer.toJson<int>(hasAttachment),
+      'attachmentPaths': serializer.toJson<String?>(attachmentPaths),
+      'payload': serializer.toJson<String?>(payload),
     };
   }
 
@@ -3862,7 +3932,9 @@ class SyncChangelogData extends DataClass
     int? revision,
     DateTime? changedAt,
     Value<DateTime?> syncedAt = const Value.absent(),
-    Value<String?> payloadHash = const Value.absent(),
+    int? hasAttachment,
+    Value<String?> attachmentPaths = const Value.absent(),
+    Value<String?> payload = const Value.absent(),
   }) => SyncChangelogData(
     id: id ?? this.id,
     deviceId: deviceId ?? this.deviceId,
@@ -3872,7 +3944,11 @@ class SyncChangelogData extends DataClass
     revision: revision ?? this.revision,
     changedAt: changedAt ?? this.changedAt,
     syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
-    payloadHash: payloadHash.present ? payloadHash.value : this.payloadHash,
+    hasAttachment: hasAttachment ?? this.hasAttachment,
+    attachmentPaths: attachmentPaths.present
+        ? attachmentPaths.value
+        : this.attachmentPaths,
+    payload: payload.present ? payload.value : this.payload,
   );
   SyncChangelogData copyWithCompanion(SyncChangelogCompanion data) {
     return SyncChangelogData(
@@ -3886,9 +3962,13 @@ class SyncChangelogData extends DataClass
       revision: data.revision.present ? data.revision.value : this.revision,
       changedAt: data.changedAt.present ? data.changedAt.value : this.changedAt,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
-      payloadHash: data.payloadHash.present
-          ? data.payloadHash.value
-          : this.payloadHash,
+      hasAttachment: data.hasAttachment.present
+          ? data.hasAttachment.value
+          : this.hasAttachment,
+      attachmentPaths: data.attachmentPaths.present
+          ? data.attachmentPaths.value
+          : this.attachmentPaths,
+      payload: data.payload.present ? data.payload.value : this.payload,
     );
   }
 
@@ -3903,7 +3983,9 @@ class SyncChangelogData extends DataClass
           ..write('revision: $revision, ')
           ..write('changedAt: $changedAt, ')
           ..write('syncedAt: $syncedAt, ')
-          ..write('payloadHash: $payloadHash')
+          ..write('hasAttachment: $hasAttachment, ')
+          ..write('attachmentPaths: $attachmentPaths, ')
+          ..write('payload: $payload')
           ..write(')'))
         .toString();
   }
@@ -3918,7 +4000,9 @@ class SyncChangelogData extends DataClass
     revision,
     changedAt,
     syncedAt,
-    payloadHash,
+    hasAttachment,
+    attachmentPaths,
+    payload,
   );
   @override
   bool operator ==(Object other) =>
@@ -3932,7 +4016,9 @@ class SyncChangelogData extends DataClass
           other.revision == this.revision &&
           other.changedAt == this.changedAt &&
           other.syncedAt == this.syncedAt &&
-          other.payloadHash == this.payloadHash);
+          other.hasAttachment == this.hasAttachment &&
+          other.attachmentPaths == this.attachmentPaths &&
+          other.payload == this.payload);
 }
 
 class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
@@ -3944,7 +4030,9 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
   final Value<int> revision;
   final Value<DateTime> changedAt;
   final Value<DateTime?> syncedAt;
-  final Value<String?> payloadHash;
+  final Value<int> hasAttachment;
+  final Value<String?> attachmentPaths;
+  final Value<String?> payload;
   const SyncChangelogCompanion({
     this.id = const Value.absent(),
     this.deviceId = const Value.absent(),
@@ -3954,7 +4042,9 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
     this.revision = const Value.absent(),
     this.changedAt = const Value.absent(),
     this.syncedAt = const Value.absent(),
-    this.payloadHash = const Value.absent(),
+    this.hasAttachment = const Value.absent(),
+    this.attachmentPaths = const Value.absent(),
+    this.payload = const Value.absent(),
   });
   SyncChangelogCompanion.insert({
     this.id = const Value.absent(),
@@ -3965,7 +4055,9 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
     required int revision,
     required DateTime changedAt,
     this.syncedAt = const Value.absent(),
-    this.payloadHash = const Value.absent(),
+    this.hasAttachment = const Value.absent(),
+    this.attachmentPaths = const Value.absent(),
+    this.payload = const Value.absent(),
   }) : deviceId = Value(deviceId),
        entityType = Value(entityType),
        entityId = Value(entityId),
@@ -3981,7 +4073,9 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
     Expression<int>? revision,
     Expression<DateTime>? changedAt,
     Expression<DateTime>? syncedAt,
-    Expression<String>? payloadHash,
+    Expression<int>? hasAttachment,
+    Expression<String>? attachmentPaths,
+    Expression<String>? payload,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3992,7 +4086,9 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
       if (revision != null) 'revision': revision,
       if (changedAt != null) 'changed_at': changedAt,
       if (syncedAt != null) 'synced_at': syncedAt,
-      if (payloadHash != null) 'payload_hash': payloadHash,
+      if (hasAttachment != null) 'has_attachment': hasAttachment,
+      if (attachmentPaths != null) 'attachment_paths': attachmentPaths,
+      if (payload != null) 'payload': payload,
     });
   }
 
@@ -4005,7 +4101,9 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
     Value<int>? revision,
     Value<DateTime>? changedAt,
     Value<DateTime?>? syncedAt,
-    Value<String?>? payloadHash,
+    Value<int>? hasAttachment,
+    Value<String?>? attachmentPaths,
+    Value<String?>? payload,
   }) {
     return SyncChangelogCompanion(
       id: id ?? this.id,
@@ -4016,7 +4114,9 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
       revision: revision ?? this.revision,
       changedAt: changedAt ?? this.changedAt,
       syncedAt: syncedAt ?? this.syncedAt,
-      payloadHash: payloadHash ?? this.payloadHash,
+      hasAttachment: hasAttachment ?? this.hasAttachment,
+      attachmentPaths: attachmentPaths ?? this.attachmentPaths,
+      payload: payload ?? this.payload,
     );
   }
 
@@ -4047,8 +4147,14 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
     if (syncedAt.present) {
       map['synced_at'] = Variable<DateTime>(syncedAt.value);
     }
-    if (payloadHash.present) {
-      map['payload_hash'] = Variable<String>(payloadHash.value);
+    if (hasAttachment.present) {
+      map['has_attachment'] = Variable<int>(hasAttachment.value);
+    }
+    if (attachmentPaths.present) {
+      map['attachment_paths'] = Variable<String>(attachmentPaths.value);
+    }
+    if (payload.present) {
+      map['payload'] = Variable<String>(payload.value);
     }
     return map;
   }
@@ -4064,7 +4170,9 @@ class SyncChangelogCompanion extends UpdateCompanion<SyncChangelogData> {
           ..write('revision: $revision, ')
           ..write('changedAt: $changedAt, ')
           ..write('syncedAt: $syncedAt, ')
-          ..write('payloadHash: $payloadHash')
+          ..write('hasAttachment: $hasAttachment, ')
+          ..write('attachmentPaths: $attachmentPaths, ')
+          ..write('payload: $payload')
           ..write(')'))
         .toString();
   }
@@ -8377,7 +8485,9 @@ typedef $$SyncChangelogTableCreateCompanionBuilder =
       required int revision,
       required DateTime changedAt,
       Value<DateTime?> syncedAt,
-      Value<String?> payloadHash,
+      Value<int> hasAttachment,
+      Value<String?> attachmentPaths,
+      Value<String?> payload,
     });
 typedef $$SyncChangelogTableUpdateCompanionBuilder =
     SyncChangelogCompanion Function({
@@ -8389,7 +8499,9 @@ typedef $$SyncChangelogTableUpdateCompanionBuilder =
       Value<int> revision,
       Value<DateTime> changedAt,
       Value<DateTime?> syncedAt,
-      Value<String?> payloadHash,
+      Value<int> hasAttachment,
+      Value<String?> attachmentPaths,
+      Value<String?> payload,
     });
 
 class $$SyncChangelogTableFilterComposer
@@ -8441,8 +8553,18 @@ class $$SyncChangelogTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get payloadHash => $composableBuilder(
-    column: $table.payloadHash,
+  ColumnFilters<int> get hasAttachment => $composableBuilder(
+    column: $table.hasAttachment,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get attachmentPaths => $composableBuilder(
+    column: $table.attachmentPaths,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payload => $composableBuilder(
+    column: $table.payload,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -8496,8 +8618,18 @@ class $$SyncChangelogTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get payloadHash => $composableBuilder(
-    column: $table.payloadHash,
+  ColumnOrderings<int> get hasAttachment => $composableBuilder(
+    column: $table.hasAttachment,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get attachmentPaths => $composableBuilder(
+    column: $table.attachmentPaths,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payload => $composableBuilder(
+    column: $table.payload,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -8537,10 +8669,18 @@ class $$SyncChangelogTableAnnotationComposer
   GeneratedColumn<DateTime> get syncedAt =>
       $composableBuilder(column: $table.syncedAt, builder: (column) => column);
 
-  GeneratedColumn<String> get payloadHash => $composableBuilder(
-    column: $table.payloadHash,
+  GeneratedColumn<int> get hasAttachment => $composableBuilder(
+    column: $table.hasAttachment,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get attachmentPaths => $composableBuilder(
+    column: $table.attachmentPaths,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => column);
 }
 
 class $$SyncChangelogTableTableManager
@@ -8586,7 +8726,9 @@ class $$SyncChangelogTableTableManager
                 Value<int> revision = const Value.absent(),
                 Value<DateTime> changedAt = const Value.absent(),
                 Value<DateTime?> syncedAt = const Value.absent(),
-                Value<String?> payloadHash = const Value.absent(),
+                Value<int> hasAttachment = const Value.absent(),
+                Value<String?> attachmentPaths = const Value.absent(),
+                Value<String?> payload = const Value.absent(),
               }) => SyncChangelogCompanion(
                 id: id,
                 deviceId: deviceId,
@@ -8596,7 +8738,9 @@ class $$SyncChangelogTableTableManager
                 revision: revision,
                 changedAt: changedAt,
                 syncedAt: syncedAt,
-                payloadHash: payloadHash,
+                hasAttachment: hasAttachment,
+                attachmentPaths: attachmentPaths,
+                payload: payload,
               ),
           createCompanionCallback:
               ({
@@ -8608,7 +8752,9 @@ class $$SyncChangelogTableTableManager
                 required int revision,
                 required DateTime changedAt,
                 Value<DateTime?> syncedAt = const Value.absent(),
-                Value<String?> payloadHash = const Value.absent(),
+                Value<int> hasAttachment = const Value.absent(),
+                Value<String?> attachmentPaths = const Value.absent(),
+                Value<String?> payload = const Value.absent(),
               }) => SyncChangelogCompanion.insert(
                 id: id,
                 deviceId: deviceId,
@@ -8618,7 +8764,9 @@ class $$SyncChangelogTableTableManager
                 revision: revision,
                 changedAt: changedAt,
                 syncedAt: syncedAt,
-                payloadHash: payloadHash,
+                hasAttachment: hasAttachment,
+                attachmentPaths: attachmentPaths,
+                payload: payload,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

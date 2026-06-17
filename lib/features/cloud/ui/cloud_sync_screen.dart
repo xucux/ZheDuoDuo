@@ -723,11 +723,63 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
 
     try {
       final syncService = ref.read(syncServiceProvider);
-      final result = await syncService.fullDownload(
+      var result = await syncService.fullDownload(
         transport,
         dirPrefix: _dirPrefixController.text.trim(),
         filename: filename,
       );
+
+      // 本地存在未同步变更，询问用户
+      if (!result.success && result.message != null && result.message!.contains('本地存在未同步的变更') && mounted) {
+        setState(() => _syncing = false);
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('本地存在未同步变更'),
+            content: const Text('全量下载会覆盖本地数据。您希望先推送本地变更，还是强制覆盖？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'cancel'),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'push'),
+                child: const Text('先推送'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, 'force'),
+                child: const Text('强制覆盖'),
+              ),
+            ],
+          ),
+        );
+
+        if (choice == 'push') {
+          setState(() => _syncing = true);
+          final pushResult = await syncService.incrementalPush(transport, dirPrefix: _dirPrefixController.text.trim());
+          if (!pushResult.success) {
+            setState(() => _syncing = false);
+            _showResultDialog(pushResult);
+            return;
+          }
+          // 推送成功后重新下载
+          result = await syncService.fullDownload(
+            transport,
+            dirPrefix: _dirPrefixController.text.trim(),
+            filename: filename,
+          );
+        } else if (choice == 'force') {
+          setState(() => _syncing = true);
+          result = await syncService.fullDownload(
+            transport,
+            dirPrefix: _dirPrefixController.text.trim(),
+            filename: filename,
+            force: true,
+          );
+        } else {
+          return;
+        }
+      }
 
       setState(() {
         _syncing = false;

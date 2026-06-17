@@ -9,18 +9,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/daos/deal_dao.dart';
-import '../../../core/database/daos/sync_dao.dart';
 import '../../../shared/theme/theme_provider.dart';
-
-final _syncDaoProvider = Provider<SyncDao>((ref) {
-  final db = ref.watch(databaseProvider);
-  return SyncDao(db);
-});
 
 final dealDaoProvider = Provider<DealDao>((ref) {
   final db = ref.watch(databaseProvider);
-  final syncDao = ref.watch(_syncDaoProvider);
-  return DealDao(db, syncDao);
+  final syncDao = ref.watch(syncDaoProvider);
+  final logger = ref.watch(changeLoggerProvider);
+  return DealDao(db, syncDao, logger);
 });
 
 /// Deal list filters state

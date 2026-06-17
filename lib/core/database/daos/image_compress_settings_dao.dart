@@ -8,6 +8,7 @@
 import 'package:drift/drift.dart';
 import '../app_database.dart';
 import '../tables/image_compress_settings.dart';
+import '../../sync/change_logger.dart';
 
 part 'image_compress_settings_dao.g.dart';
 
@@ -18,7 +19,9 @@ part 'image_compress_settings_dao.g.dart';
 @DriftAccessor(tables: [ImageCompressSettings])
 class ImageCompressSettingsDao extends DatabaseAccessor<AppDatabase>
     with _$ImageCompressSettingsDaoMixin {
-  ImageCompressSettingsDao(super.db);
+  final ChangeLogger? _changeLogger;
+
+  ImageCompressSettingsDao(super.db, [this._changeLogger]);
 
   /// 获取所有压缩档位配置（按 minSize 升序）
   Future<List<ImageCompressSetting>> getAllSettings() async {
@@ -64,6 +67,7 @@ class ImageCompressSettingsDao extends DatabaseAccessor<AppDatabase>
         .write(ImageCompressSettingsCompanion(
       quality: Value(quality),
     ));
+    await _changeLogger?.logImageCompressSetting(minSize, 'update', payload: {'quality': quality});
   }
 
   /// 更新指定档位的最大宽度
@@ -73,6 +77,7 @@ class ImageCompressSettingsDao extends DatabaseAccessor<AppDatabase>
         .write(ImageCompressSettingsCompanion(
       maxWidth: Value(maxWidth),
     ));
+    await _changeLogger?.logImageCompressSetting(minSize, 'update', payload: {'maxWidth': maxWidth});
   }
 
   /// 重置为默认压缩配置
@@ -112,5 +117,10 @@ class ImageCompressSettingsDao extends DatabaseAccessor<AppDatabase>
         ),
       ]);
     });
+    // 重置操作记录为批量 insert
+    await _changeLogger?.logImageCompressSetting(0, 'insert');
+    await _changeLogger?.logImageCompressSetting(524288, 'insert');
+    await _changeLogger?.logImageCompressSetting(1048576, 'insert');
+    await _changeLogger?.logImageCompressSetting(10485760, 'insert');
   }
 }

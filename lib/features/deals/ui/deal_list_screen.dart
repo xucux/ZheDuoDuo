@@ -514,43 +514,15 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
 
   void _showCategoryPicker(BuildContext context) {
     ref.read(categoriesProvider).whenData((categories) {
-      showModalBottomSheet(
+      _showSearchablePicker(
         context: context,
-        isScrollControlled: true,
-        showDragHandle: false,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (ctx) => SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(padding: EdgeInsets.all(16), child: Text('选择分类', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: categories.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return ListTile(
-                          title: const Text('全部分类'),
-                          trailing: ref.read(dealFiltersProvider).category == null ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
-                          onTap: () { ref.read(dealFiltersProvider.notifier).setCategory(null); Navigator.pop(ctx); },
-                        );
-                      }
-                      final c = categories[index - 1];
-                      return ListTile(
-                        title: Text(c),
-                        trailing: ref.read(dealFiltersProvider).category == c ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
-                        onTap: () { ref.read(dealFiltersProvider.notifier).setCategory(c); Navigator.pop(ctx); },
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
+        title: '选择分类',
+        allLabel: '全部分类',
+        items: categories,
+        isSelected: (item) => ref.read(dealFiltersProvider).category == item,
+        isAllSelected: ref.read(dealFiltersProvider).category == null,
+        onSelect: (item) { ref.read(dealFiltersProvider.notifier).setCategory(item); },
+        onSelectAll: () { ref.read(dealFiltersProvider.notifier).setCategory(null); },
       );
     });
   }
@@ -580,45 +552,45 @@ class _DealListScreenState extends ConsumerState<DealListScreen> {
 
   void _showTagPicker(BuildContext context) {
     ref.read(tagsProvider).whenData((tags) {
-      showModalBottomSheet(
+      _showSearchablePicker(
         context: context,
-        isScrollControlled: true,
-        showDragHandle: false,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (ctx) => SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(padding: EdgeInsets.all(16), child: Text('选择标签', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: tags.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return ListTile(
-                          title: const Text('全部标签'),
-                          trailing: ref.read(dealFiltersProvider).tag == null ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
-                          onTap: () { ref.read(dealFiltersProvider.notifier).setTag(null); Navigator.pop(ctx); },
-                        );
-                      }
-                      final t = tags[index - 1];
-                      return ListTile(
-                        title: Text(t),
-                        trailing: ref.read(dealFiltersProvider).tag == t ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
-                        onTap: () { ref.read(dealFiltersProvider.notifier).setTag(t); Navigator.pop(ctx); },
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
+        title: '选择标签',
+        allLabel: '全部标签',
+        items: tags,
+        isSelected: (item) => ref.read(dealFiltersProvider).tag == item,
+        isAllSelected: ref.read(dealFiltersProvider).tag == null,
+        onSelect: (item) { ref.read(dealFiltersProvider.notifier).setTag(item); },
+        onSelectAll: () { ref.read(dealFiltersProvider.notifier).setTag(null); },
       );
     });
+  }
+
+  /// 通用的可搜索选择器
+  void _showSearchablePicker({
+    required BuildContext context,
+    required String title,
+    required String allLabel,
+    required List<String> items,
+    required bool Function(String) isSelected,
+    required bool isAllSelected,
+    required void Function(String?) onSelect,
+    required VoidCallback onSelectAll,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: false,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => _SearchablePickerSheet(
+        title: title,
+        allLabel: allLabel,
+        items: items,
+        isSelected: isSelected,
+        isAllSelected: isAllSelected,
+        onSelect: (item) { onSelect(item); Navigator.pop(ctx); },
+        onSelectAll: () { onSelectAll(); Navigator.pop(ctx); },
+      ),
+    );
   }
 
   void _confirmDelete(BuildContext context, String dealId) {
@@ -828,6 +800,112 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(color: selected ? AppColors.brandColor : theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(20)),
         child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: selected ? Colors.white : theme.colorScheme.onSurfaceVariant)),
+      ),
+    );
+  }
+}
+
+/// 可搜索的选择器底部弹窗
+class _SearchablePickerSheet extends StatefulWidget {
+  final String title;
+  final String allLabel;
+  final List<String> items;
+  final bool Function(String) isSelected;
+  final bool isAllSelected;
+  final void Function(String?) onSelect;
+  final VoidCallback onSelectAll;
+
+  const _SearchablePickerSheet({
+    required this.title,
+    required this.allLabel,
+    required this.items,
+    required this.isSelected,
+    required this.isAllSelected,
+    required this.onSelect,
+    required this.onSelectAll,
+  });
+
+  @override
+  State<_SearchablePickerSheet> createState() => _SearchablePickerSheetState();
+}
+
+class _SearchablePickerSheetState extends State<_SearchablePickerSheet> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<String> get _filteredItems {
+    if (_query.isEmpty) return widget.items;
+    return widget.items.where((item) => item.toLowerCase().contains(_query.toLowerCase())).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final filteredItems = _filteredItems;
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Text(widget.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '搜索...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: theme.dividerColor)),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Expanded(
+              child: ListView.builder(
+                itemCount: filteredItems.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return ListTile(
+                      title: Text(widget.allLabel),
+                      trailing: widget.isAllSelected ? Icon(Icons.check, color: theme.colorScheme.primary) : null,
+                      onTap: widget.onSelectAll,
+                    );
+                  }
+                  final item = filteredItems[index - 1];
+                  return ListTile(
+                    title: Text(item),
+                    trailing: widget.isSelected(item) ? Icon(Icons.check, color: theme.colorScheme.primary) : null,
+                    onTap: () => widget.onSelect(item),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

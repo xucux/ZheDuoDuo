@@ -80,6 +80,18 @@ class ImageCompressSettingsDao extends DatabaseAccessor<AppDatabase>
     await _changeLogger?.logImageCompressSetting(minSize, 'update', payload: {'maxWidth': maxWidth});
   }
 
+  /// 静默 upsert（从 ImageCompressSetting 模型，不记录 changelog，用于同步服务应用远端变更）
+  Future<void> upsertFromModelSilent(ImageCompressSetting setting) async {
+    await into(imageCompressSettings).insertOnConflictUpdate(setting);
+  }
+
+  /// 静默删除指定档位（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> deleteSettingSilent(int minSize) async {
+    await (delete(imageCompressSettings)
+          ..where((t) => t.minSize.equals(minSize)))
+        .go();
+  }
+
   /// 重置为默认压缩配置
   ///
   /// 清空现有配置并插入默认分档：

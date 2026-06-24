@@ -83,8 +83,19 @@ class ChangeLogger {
     );
   }
 
+  /// 同步内部状态 key 黑名单（不应记录到 changelog）
+  static const Set<String> _syncInternalKeys = {
+    'cloud.lastSyncAt',
+    'cloud.enabled',
+    'cloud.provider',
+    'cloud.syncDir',
+    'cloud.deviceId',
+    'cloud.dirPrefix',
+  };
+
   /// 快捷方法：记录 app_settings 变更
   Future<void> logSetting(String key, String operation, {Map<String, dynamic>? payload}) async {
+    if (_syncInternalKeys.contains(key)) return;
     await log(
       tableName: 'app_settings',
       primaryKey: key,

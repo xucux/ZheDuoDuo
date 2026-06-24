@@ -151,6 +151,21 @@ class AiChatSessionService {
     return sessions[idx];
   }
 
+  /// 删除会话中的单条消息
+  Future<bool> deleteMessage(String sessionId, String messageId) async {
+    final sessions = loadSessions();
+    final idx = sessions.indexWhere((s) => s.id == sessionId);
+    if (idx == -1) return false;
+
+    final messages = List<ChatMessage>.from(sessions[idx].messages);
+    messages.removeWhere((m) => m.id == messageId);
+    sessions[idx] = sessions[idx].copyWith(
+      messages: messages,
+      updatedAt: DateTime.now(),
+    );
+    return _saveAll(sessions);
+  }
+
   /// 删除会话
   Future<bool> deleteSession(String sessionId) {
     final sessions = loadSessions();

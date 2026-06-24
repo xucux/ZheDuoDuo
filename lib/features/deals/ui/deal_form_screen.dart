@@ -44,8 +44,9 @@ class CouponFormData {
 
 class DealFormScreen extends ConsumerStatefulWidget {
   final String? dealId;
+  final String? initialYaml;
 
-  const DealFormScreen({super.key, this.dealId});
+  const DealFormScreen({super.key, this.dealId, this.initialYaml});
 
   @override
   ConsumerState<DealFormScreen> createState() => _DealFormScreenState();
@@ -102,6 +103,9 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
     if (widget.dealId != null) {
       _isEditing = true;
       _loadDeal();
+    } else if (widget.initialYaml != null && widget.initialYaml!.isNotEmpty) {
+      _yamlController.text = widget.initialYaml!;
+      _tabController.index = 0;
     }
   }
 
@@ -238,6 +242,8 @@ class _DealFormScreenState extends ConsumerState<DealFormScreen>
           Row(
             children: [
               Expanded(child: OutlinedButton.icon(onPressed: _fillExample, icon: const Icon(Icons.auto_awesome, size: 16), label: const Text('填入示例'))),
+              const SizedBox(width: 12),
+              Expanded(child: OutlinedButton.icon(onPressed: _stripCodeBlock, icon: const Icon(Icons.code_off, size: 16), label: const Text('剔除代码块外'))),
               const SizedBox(width: 12),
               Expanded(child: FilledButton.icon(onPressed: _parseYaml, icon: const Icon(Icons.play_arrow, size: 16), label: const Text('解析并填充'))),
             ],
@@ -718,6 +724,32 @@ source:
   platform: "京东"
   logistics: "京东物流"
   link: "https://item.jd.com/100012345.html"''';
+  }
+
+  /// 剔除 ```代码块``` 以外的文字，只保留代码块内的内容
+  void _stripCodeBlock() {
+    final text = _yamlController.text;
+    if (text.isEmpty) return;
+
+    final codeBlockRegex = RegExp(r'```[\w]*\n([\s\S]*?)```', multiLine: true);
+    final matches = codeBlockRegex.allMatches(text);
+
+    if (matches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未发现代码块（```...```）')),
+      );
+      return;
+    }
+
+    final buffer = StringBuffer();
+    for (final match in matches) {
+      buffer.write(match.group(1));
+    }
+
+    _yamlController.text = buffer.toString().trim();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已提取 ${matches.length} 个代码块内容')),
+    );
   }
 
   void _parseYaml() {

@@ -19,7 +19,7 @@ class ScreenshotParserTool extends McpTool {
   ScreenshotParserTool(this._db);
 
   @override
-  final String name = 'screenshot_parser_add_deal';
+  final String name = 'add_deal';
 
   @override
   final String description = '解析商品截图元数据并新增折扣信息记录';

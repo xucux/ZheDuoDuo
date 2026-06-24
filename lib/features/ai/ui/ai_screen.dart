@@ -35,6 +35,7 @@ class AiScreen extends ConsumerStatefulWidget {
 
 class _PendingImageInfo {
   final String path;
+  final String fileName;
   final String? ocrText;
   final bool ocrDone;
   /// 处理模式：'ocr' = OCR 识别后文本带入，'base64' = Base64 图片带入
@@ -42,6 +43,7 @@ class _PendingImageInfo {
 
   const _PendingImageInfo({
     required this.path,
+    required this.fileName,
     this.ocrText,
     this.ocrDone = false,
     this.mode = 'ocr',
@@ -552,7 +554,7 @@ class _AiScreenState extends ConsumerState<AiScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
+              color: theme.colorScheme.surface,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(14),
                 topRight: Radius.circular(14),
@@ -690,144 +692,152 @@ class _AiScreenState extends ConsumerState<AiScreen> {
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.82,
           ),
-          child: GestureDetector(
-            onLongPress: msg.content.isNotEmpty
-                ? () {
-                    Clipboard.setData(ClipboardData(text: msg.content));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已复制')),
-                    );
-                  }
-                : null,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isUser ? AntdColors.primary : theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(14),
-                  topRight: const Radius.circular(14),
-                  bottomLeft: isUser
-                      ? const Radius.circular(14)
-                      : const Radius.circular(4),
-                  bottomRight: isUser
-                      ? const Radius.circular(4)
-                      : const Radius.circular(14),
-                ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isUser ? AntdColors.primary : theme.colorScheme.surface,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(14),
+                topRight: const Radius.circular(14),
+                bottomLeft: isUser
+                    ? const Radius.circular(14)
+                    : const Radius.circular(4),
+                bottomRight: isUser
+                    ? const Radius.circular(4)
+                    : const Radius.circular(14),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // 图片（如果有）
-                  if (msg.imagePaths.isNotEmpty) ...[
-                    ...msg.imagePaths.map((path) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(path),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: 160,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: isUser
-                                  ? Colors.white.withValues(alpha: 0.2)
-                                  : theme.colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: Icon(Icons.broken_image_outlined,
-                                  color: theme.colorScheme.outline),
-                            ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // 图片（如果有）
+                if (msg.imagePaths.isNotEmpty) ...[
+                  ...msg.imagePaths.map((path) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        File(path),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: 160,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: isUser
+                                ? Colors.white.withValues(alpha: 0.2)
+                                : theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Icon(Icons.broken_image_outlined,
+                                color: theme.colorScheme.outline),
                           ),
                         ),
                       ),
-                    )),
-                    const SizedBox(height: 4),
-                  ],
-                  // 推理过程（可折叠，仅 assistant 消息）
-                  if (hasReasoning) ...[
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _reasoningExpanded[msg.id] = !isExpanded;
-                        });
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-                          ),
+                    ),
+                  )),
+                  const SizedBox(height: 4),
+                ],
+                // 推理过程（可折叠，仅 assistant 消息）
+                if (hasReasoning) ...[
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _reasoningExpanded[msg.id] = !isExpanded;
+                      });
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  isExpanded ? Icons.expand_less : Icons.expand_more,
-                                  size: 14,
-                                  color: theme.colorScheme.primary,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  isExpanded ? '隐藏推理过程' : '查看推理过程',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (isExpanded) ...[
-                              const SizedBox(height: 6),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isExpanded ? Icons.expand_less : Icons.expand_more,
+                                size: 14,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 4),
                               Text(
-                                msg.reasoningContent!,
+                                isExpanded ? '隐藏推理过程' : '查看推理过程',
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  height: 1.5,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: theme.colorScheme.primary,
                                 ),
                               ),
                             ],
+                          ),
+                          if (isExpanded) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              msg.reasoningContent!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.5,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
                           ],
-                        ),
+                        ],
                       ),
-                    ),
-                  ],
-                  // 消息内容
-                  if (msg.content.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        msg.content,
-                        style: TextStyle(
-                          fontSize: 14,
-                          height: 1.5,
-                          color: isUser ? Colors.white : theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  // 时间戳
-                  Text(
-                    _formatTime(msg.createdAt),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isUser
-                          ? Colors.white.withValues(alpha: 0.6)
-                          : theme.colorScheme.outline,
                     ),
                   ),
                 ],
-              ),
+                // 消息内容
+                if (msg.content.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      msg.content,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: isUser ? Colors.white : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                // 时间戳 + 操作按钮
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _formatTime(msg.createdAt),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isUser
+                            ? Colors.white.withValues(alpha: 0.6)
+                            : theme.colorScheme.outline,
+                      ),
+                    ),
+                    if (msg.content.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => _showMessageActions(context, msg, isUser),
+                        child: Icon(
+                          Icons.more_horiz,
+                          size: 14,
+                          color: isUser
+                              ? Colors.white.withValues(alpha: 0.6)
+                              : theme.colorScheme.outline,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -844,7 +854,7 @@ class _AiScreenState extends ConsumerState<AiScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
+            color: theme.colorScheme.surface,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(14),
               topRight: Radius.circular(14),
@@ -1189,7 +1199,8 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     final path = await PlatformUtils.pickImageFromGallery();
     if (path == null) return;
 
-    _pendingImages.add(_PendingImageInfo(path: path));
+    final fileName = path.split(Platform.pathSeparator).last;
+    _pendingImages.add(_PendingImageInfo(path: path, fileName: fileName));
     setState(() {});
 
     // 异步执行 OCR
@@ -1201,6 +1212,7 @@ class _AiScreenState extends ConsumerState<AiScreen> {
         setState(() {
           _pendingImages[existingIdx] = _PendingImageInfo(
             path: path,
+            fileName: fileName,
             ocrText: ocrResult,
             ocrDone: true,
           );
@@ -1212,6 +1224,7 @@ class _AiScreenState extends ConsumerState<AiScreen> {
         setState(() {
           _pendingImages[existingIdx] = _PendingImageInfo(
             path: path,
+            fileName: fileName,
             ocrDone: true,
           );
         });
@@ -1224,7 +1237,8 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     final path = await PlatformUtils.pickImageFromGallery();
     if (path == null) return;
 
-    _pendingImages.add(_PendingImageInfo(path: path, mode: 'base64'));
+    final fileName = path.split(Platform.pathSeparator).last;
+    _pendingImages.add(_PendingImageInfo(path: path, fileName: fileName, mode: 'base64'));
     setState(() {});
   }
 
@@ -1268,8 +1282,11 @@ class _AiScreenState extends ConsumerState<AiScreen> {
         } catch (_) {
           // 压缩或读取失败则跳过该图片
         }
+        ocrParts.add('[图片文件: ${img.fileName}]');
       } else if (img.ocrText != null && img.ocrText!.isNotEmpty) {
-        ocrParts.add('[图片识别结果]\n${img.ocrText}');
+        ocrParts.add('[图片文件: ${img.fileName}]\n[图片识别结果]\n${img.ocrText}');
+      } else {
+        ocrParts.add('[图片文件: ${img.fileName}]');
       }
     }
     final combinedText = [
@@ -1303,16 +1320,14 @@ class _AiScreenState extends ConsumerState<AiScreen> {
         final mcpEnabled = ref.read(mcpEnabledProvider);
         final mcpRegistry = ref.read(mcpToolRegistryProvider);
         final mcpToolConfigs = ref.read(mcpToolSettingsProvider);
-        final enabledToolIds = mcpToolConfigs
-            .where((c) => c.enabled)
-            .map((c) => c.toolId)
-            .toSet();
         final mcpTools = <Map<String, dynamic>>[];
         Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)? onMcpCall;
 
         if (mcpEnabled) {
-          for (final tool in mcpRegistry.enabledTools) {
-            if (!enabledToolIds.contains(tool.name)) continue;
+          for (final config in mcpToolConfigs) {
+            if (!config.enabled) continue;
+            final tool = mcpRegistry.get(config.functionName);
+            if (tool == null) continue;
             mcpTools.add({
               'type': 'function',
               'function': {
@@ -1441,6 +1456,91 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     if (_currentSessionId.isEmpty) {
       _startNewChat();
     }
+  }
+
+  /// 显示消息操作菜单（复制 / 填充到 YAML / 删除）
+  void _showMessageActions(BuildContext context, ChatMessage msg, bool isUser) {
+    final theme = Theme.of(context);
+    final renderBox = context.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (renderBox == null || overlay == null) return;
+
+    final buttonSize = renderBox.size;
+    final buttonPosition = renderBox.localToGlobal(Offset.zero, ancestor: overlay);
+
+    showMenu<int>(
+      context: context,
+      color: theme.colorScheme.surface,
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      position: RelativeRect.fromLTRB(
+        buttonPosition.dx,
+        buttonPosition.dy + buttonSize.height + 4,
+        buttonPosition.dx + buttonSize.width,
+        buttonPosition.dy,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 0,
+          height: 36,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.copy_outlined, size: 16, color: theme.colorScheme.onSurface),
+              const SizedBox(width: 6),
+              Text('复制', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface)),
+            ],
+          ),
+        ),
+        if (!isUser)
+          PopupMenuItem(
+            value: 1,
+            height: 36,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.output_outlined, size: 16, color: theme.colorScheme.onSurface),
+                const SizedBox(width: 6),
+                Text('填充到 YAML', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface)),
+              ],
+            ),
+          ),
+        PopupMenuItem(
+          value: 2,
+          height: 36,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.delete_outline, size: 16, color: theme.colorScheme.error),
+              const SizedBox(width: 6),
+              Text('删除', style: TextStyle(fontSize: 13, color: theme.colorScheme.error)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == null || !mounted) return;
+      switch (value) {
+        case 0:
+          Clipboard.setData(ClipboardData(text: msg.content));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('已复制')),
+          );
+        case 1:
+          context.push('/deal/new', extra: msg.content);
+        case 2:
+          _deleteMessage(msg.id);
+      }
+    });
+  }
+
+  /// 删除单条消息
+  Future<void> _deleteMessage(String messageId) async {
+    final sessionService = AiChatSessionService(await _getPrefs());
+    await sessionService.deleteMessage(_currentSessionId, messageId);
+    setState(() {
+      _sessions = sessionService.loadSessions();
+    });
   }
 
   /// 导出会话

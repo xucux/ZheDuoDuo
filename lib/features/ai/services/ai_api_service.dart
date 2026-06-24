@@ -9,8 +9,8 @@
 
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
+import '../../../core/utils/logger_util.dart';
 import '../models/ai_chat_models.dart';
 
 /// AI API 调用结果
@@ -175,7 +175,7 @@ class AiApiService {
         if (hasTools) 'tools': mcpTools,
         if (hasTools) 'tool_choice': 'auto',
       };
-      debugPrint('[AI API] OpenAI Chat Request: ${_sanitizeRequest(requestData)}');
+      AppLogger.instance.d('[AI API] OpenAI Chat Request: ${_sanitizeRequest(requestData)}');
 
       final response = await Dio().post(
         '${settings.baseUrl}/chat/completions',
@@ -191,7 +191,7 @@ class AiApiService {
       );
 
       final data = response.data as Map<String, dynamic>;
-      debugPrint('[AI API] OpenAI Chat Response (${response.statusCode}): ${_truncateResponse(data)}');
+      AppLogger.instance.d('[AI API] OpenAI Chat Response (${response.statusCode}): ${_truncateResponse(data)}');
       final choices = data['choices'] as List?;
       if (choices == null || choices.isEmpty) throw Exception('API 返回为空');
       final message = choices[0]['message'] as Map<String, dynamic>?;
@@ -232,7 +232,7 @@ class AiApiService {
       if (hasTools) 'tools': mcpTools,
       if (hasTools) 'tool_choice': 'auto',
     };
-    debugPrint('[AI API] OpenAI Chat Stream Request: ${_sanitizeRequest(requestData)}');
+    AppLogger.instance.d('[AI API] OpenAI Chat Stream Request: ${_sanitizeRequest(requestData)}');
 
     final dio = Dio();
     final response = await dio.post<ResponseBody>(
@@ -301,7 +301,7 @@ class AiApiService {
             }
           }
         } catch (e) {
-          debugPrint('[AI API] Stream parse error: $e');
+          AppLogger.instance.e('[AI API] Stream parse error: $e');
         }
       }
     }
@@ -344,7 +344,9 @@ class AiApiService {
     }
 
     callbacks.onDone?.call();
-    return AiApiResult(buffer.toString(), reasoningContent: reasoningBuffer.toString());
+    final result = AiApiResult(buffer.toString(), reasoningContent: reasoningBuffer.toString());
+    AppLogger.instance.d('[AI API] OpenAI Chat Stream Response: content=${_truncateText(result.content)}, reasoning=${_truncateText(result.reasoningContent ?? '')}');
+    return result;
   }
 
   Future<AiApiResult> _openAIResponses(
@@ -408,7 +410,7 @@ class AiApiService {
         if (hasTools) 'tools': mcpTools,
         if (hasTools) 'tool_choice': 'auto',
       };
-      debugPrint('[AI API] OpenAI Responses Request: ${_sanitizeRequest(requestData)}');
+      AppLogger.instance.d('[AI API] OpenAI Responses Request: ${_sanitizeRequest(requestData)}');
 
       final response = await Dio().post(
         '${settings.baseUrl}/responses',
@@ -424,7 +426,7 @@ class AiApiService {
       );
 
       final data = response.data as Map<String, dynamic>;
-      debugPrint('[AI API] OpenAI Responses Response (${response.statusCode}): ${_truncateResponse(data)}');
+      AppLogger.instance.d('[AI API] OpenAI Responses Response (${response.statusCode}): ${_truncateResponse(data)}');
       final output = data['output'] as List?;
       if (output == null || output.isEmpty) throw Exception('API 返回为空');
 
@@ -547,7 +549,7 @@ class AiApiService {
         'temperature': settings.temperature,
         if (hasTools) 'tools': mcpTools,
       };
-      debugPrint('[AI API] Anthropic Request: ${_sanitizeRequest(requestData)}');
+      AppLogger.instance.d('[AI API] Anthropic Request: ${_sanitizeRequest(requestData)}');
 
       final response = await Dio().post(
         '${settings.baseUrl}/v1/messages',
@@ -564,7 +566,7 @@ class AiApiService {
       );
 
       final data = response.data as Map<String, dynamic>;
-      debugPrint('[AI API] Anthropic Response (${response.statusCode}): ${_truncateResponse(data)}');
+      AppLogger.instance.d('[AI API] Anthropic Response (${response.statusCode}): ${_truncateResponse(data)}');
       final content = data['content'] as List?;
       if (content == null || content.isEmpty) throw Exception('API 返回为空');
 
@@ -643,7 +645,7 @@ class AiApiService {
       'stream': true,
       if (hasTools) 'tools': mcpTools,
     };
-    debugPrint('[AI API] Anthropic Stream Request: ${_sanitizeRequest(requestData)}');
+    AppLogger.instance.d('[AI API] Anthropic Stream Request: ${_sanitizeRequest(requestData)}');
 
     final dio = Dio();
     final response = await dio.post<ResponseBody>(
@@ -677,7 +679,9 @@ class AiApiService {
         // Anthropic 流式以 [DONE] 结束
         if (data == '[DONE]') {
           callbacks.onDone?.call();
-          return AiApiResult(buffer.toString(), reasoningContent: thinkingBuffer.toString());
+          final result = AiApiResult(buffer.toString(), reasoningContent: thinkingBuffer.toString());
+          AppLogger.instance.d('[AI API] Anthropic Stream Response: content=${_truncateText(result.content)}, reasoning=${_truncateText(result.reasoningContent ?? '')}');
+          return result;
         }
 
         try {
@@ -783,16 +787,20 @@ class AiApiService {
             }
 
             callbacks.onDone?.call();
-            return AiApiResult(buffer.toString(), reasoningContent: thinkingBuffer.toString());
+            final result = AiApiResult(buffer.toString(), reasoningContent: thinkingBuffer.toString());
+            AppLogger.instance.d('[AI API] Anthropic Stream Response: content=${_truncateText(result.content)}, reasoning=${_truncateText(result.reasoningContent ?? '')}');
+            return result;
           }
         } catch (e) {
-          debugPrint('[AI API] Anthropic stream parse error: $e');
+          AppLogger.instance.e('[AI API] Anthropic stream parse error: $e');
         }
       }
     }
 
     callbacks.onDone?.call();
-    return AiApiResult(buffer.toString(), reasoningContent: thinkingBuffer.toString());
+    final result = AiApiResult(buffer.toString(), reasoningContent: thinkingBuffer.toString());
+    AppLogger.instance.d('[AI API] Anthropic Stream Response: content=${_truncateText(result.content)}, reasoning=${_truncateText(result.reasoningContent ?? '')}');
+    return result;
   }
 
   Future<void> _executeToolAndAppend(
@@ -864,7 +872,9 @@ class AiApiService {
   }
 
   Map<String, dynamic> _sanitizeRequest(Map<String, dynamic> data) {
-    final sanitized = Map<String, dynamic>.from(data);
+    final sanitized = Map<String, dynamic>.from(
+      json.decode(json.encode(data)) as Map<String, dynamic>,
+    );
     if (sanitized.containsKey('headers')) {
       final headers = Map<String, dynamic>.from(sanitized['headers'] as Map);
       if (headers.containsKey('Authorization')) {
@@ -875,17 +885,43 @@ class AiApiService {
       }
       sanitized['headers'] = headers;
     }
+    _truncateBase64InMap(sanitized);
     return sanitized;
+  }
+
+  void _truncateBase64InMap(Map<String, dynamic> map) {
+    for (final key in map.keys.toList()) {
+      final value = map[key];
+      if (value is String && value.startsWith('data:image') && value.contains('base64,')) {
+        final prefix = value.substring(0, value.indexOf('base64,') + 7);
+        final totalLen = value.length;
+        final b64Len = totalLen - prefix.length;
+        map[key] = '$prefix...(truncated, total=$totalLen, b64=$b64Len)';
+      } else if (value is Map<String, dynamic>) {
+        _truncateBase64InMap(value);
+      } else if (value is List) {
+        for (int i = 0; i < value.length; i++) {
+          if (value[i] is Map<String, dynamic>) {
+            _truncateBase64InMap(value[i] as Map<String, dynamic>);
+          } else if (value[i] is String && (value[i] as String).startsWith('data:image') && (value[i] as String).contains('base64,')) {
+            final v = value[i] as String;
+            final prefix = v.substring(0, v.indexOf('base64,') + 7);
+            final totalLen = v.length;
+            final b64Len = totalLen - prefix.length;
+            value[i] = '$prefix...(truncated, total=$totalLen, b64=$b64Len)';
+          }
+        }
+      }
+    }
   }
 
   Map<String, dynamic> _truncateResponse(Map<String, dynamic> data) {
     final result = Map<String, dynamic>.from(data);
-    // 截断长文本内容
-    void truncateValue(dynamic value, int maxLength) {
-      if (value is String && value.length > maxLength) {
-        return;
-      }
-    }
     return result;
+  }
+
+  String _truncateText(String text, {int maxLength = 100}) {
+    if (text.length <= maxLength) return text;
+    return '${text.substring(0, maxLength)}...';
   }
 }

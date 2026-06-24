@@ -73,6 +73,16 @@ class AiConfigDao extends DatabaseAccessor<AppDatabase> with _$AiConfigDaoMixin 
     await _changeLogger?.logAiConfig(id, 'delete');
   }
 
+  /// 静默 upsert（从 AiConfig 模型，不记录 changelog，用于同步服务应用远端变更）
+  Future<void> saveConfigFromModelSilent(AiConfig config) async {
+    await into(aiConfigs).insertOnConflictUpdate(config);
+  }
+
+  /// 静默删除（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> deleteConfigSilent(String id) async {
+    await (delete(aiConfigs)..where((t) => t.id.equals(id))).go();
+  }
+
   /// 获取指定 ID 的配置
   Future<AiConfig?> getConfig(String id) async {
     final query = select(aiConfigs)..where((t) => t.id.equals(id));

@@ -10,6 +10,7 @@ import '../models/mcp_tool.dart';
 import '../tools/deals_aggregate_tool.dart';
 import '../tools/deals_group_tool.dart';
 import '../tools/deals_query_tool.dart';
+import '../tools/now_time_tool.dart';
 import '../tools/ocr_tool.dart';
 import '../tools/screenshot_parser_tool.dart';
 
@@ -29,6 +30,7 @@ class McpToolRegistry {
     _register(DealsQueryTool(db));
     _register(DealsAggregateTool(db));
     _register(DealsGroupTool(db));
+    _register(NowTimeTool());
   }
 
   /// 注册一个工具

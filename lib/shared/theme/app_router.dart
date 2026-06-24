@@ -53,7 +53,10 @@ final appRouter = GoRouter(
                 GoRoute(
                   path: 'deal/new',
                   parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) => const DealFormScreen(),
+                  builder: (context, state) {
+                    final yaml = state.extra as String?;
+                    return DealFormScreen(initialYaml: yaml);
+                  },
                 ),
                 GoRoute(
                   path: 'deal/:id',

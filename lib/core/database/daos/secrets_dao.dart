@@ -44,9 +44,17 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
   /// 设置指定类别和键名的密钥值（upsert）
   ///
   /// [entityId] 可选，用于区分不同实体的同类型密钥。
+  /// 若值和 note 都未变化，则跳过数据库写入和变更日志记录。
   Future<void> setValue(String category, String keyName, String keyValue, {String? entityId, String? note}) async {
     final existing = await getValue(category, keyName, entityId: entityId);
     final compositeKey = entityId != null ? '$category|$keyName|$entityId' : '$category|$keyName';
+
+    // 值未变且 note 未变则跳过
+    if (existing == keyValue) {
+      final existingNote = await _getNote(category, keyName, entityId: entityId);
+      if (existingNote == note) return;
+    }
+
     if (existing != null) {
       await (update(secrets)..where((t) {
         var condition = t.category.equals(category) & t.keyName.equals(keyName);
@@ -76,6 +84,22 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
     await _changeLogger?.logSecret(compositeKey, 'upsert');
   }
 
+  /// 获取指定密钥的 note
+  Future<String?> _getNote(String category, String keyName, {String? entityId}) async {
+    final query = select(secrets)
+      ..where((t) {
+        var condition = t.category.equals(category) & t.keyName.equals(keyName);
+        if (entityId != null) {
+          condition &= t.entityId.equals(entityId);
+        } else {
+          condition &= t.entityId.isNull();
+        }
+        return condition;
+      });
+    final result = await query.getSingleOrNull();
+    return result?.note;
+  }
+
   /// 删除指定类别和键名的密钥
   ///
   /// [entityId] 可选，仅删除匹配该实体的密钥。
@@ -91,6 +115,24 @@ class SecretsDao extends DatabaseAccessor<AppDatabase> with _$SecretsDaoMixin {
       return condition;
     })).go();
     await _changeLogger?.logSecret(compositeKey, 'delete');
+  }
+
+  /// 静默 upsert（从 Secret 模型，不记录 changelog，用于同步服务应用远端变更）
+  Future<void> upsertFromModelSilent(Secret secret) async {
+    await into(secrets).insertOnConflictUpdate(secret);
+  }
+
+  /// 静默删除（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> deleteValueSilent(String category, String keyName, {String? entityId}) async {
+    await (delete(secrets)..where((t) {
+      var condition = t.category.equals(category) & t.keyName.equals(keyName);
+      if (entityId != null) {
+        condition &= t.entityId.equals(entityId);
+      } else {
+        condition &= t.entityId.isNull();
+      }
+      return condition;
+    })).go();
   }
 
   /// 获取指定类别的所有密钥

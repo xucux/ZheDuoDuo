@@ -34,7 +34,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   void initState() {
     super.initState();
-    _focusNode.requestFocus();
+    // 恢复之前的搜索状态
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final currentQuery = ref.read(dealFiltersProvider).searchQuery;
+      if (currentQuery != null && currentQuery.isNotEmpty) {
+        _searchController.text = currentQuery;
+      }
+    });
     _loadSearchHistory();
   }
 
@@ -64,9 +70,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final filters = ref.watch(dealFiltersProvider);
     final dealsAsync = ref.watch(dealsProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: TextField(
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          // 返回时清空搜索查询，避免影响优惠清单主页面
+          ref.read(dealFiltersProvider.notifier).setSearchQuery(null);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: TextField(
           controller: _searchController,
           focusNode: _focusNode,
           decoration: InputDecoration(
@@ -144,6 +157,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('搜索失败: $e')),
             ),
+    ),
     );
   }
 
@@ -284,10 +298,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        onTap: () {
-          ref.read(dealFiltersProvider.notifier).setSearchQuery(null);
-          context.push('/deal/${deal.id}');
-        },
+        onTap: () => context.push('/deal/${deal.id}'),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -329,6 +340,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                             ),
                           ),
                         ),
+                        if (deal.visualType != 'none') ...[
+                          const SizedBox(width: 6),
+                          _buildVisualBadge(context, deal.visualType),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -358,6 +373,52 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildVisualBadge(BuildContext context, String visualType) {
+    final theme = Theme.of(context);
+    IconData icon;
+    String text;
+    Color bgColor;
+    Color fgColor;
+    switch (visualType) {
+      case 'image':
+        icon = Icons.image_outlined;
+        text = '有图';
+        bgColor = theme.colorScheme.primaryContainer;
+        fgColor = theme.colorScheme.onPrimaryContainer;
+        break;
+      case 'ascii':
+        icon = Icons.code;
+        text = 'ASCII';
+        bgColor = theme.colorScheme.tertiaryContainer;
+        fgColor = theme.colorScheme.onTertiaryContainer;
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: fgColor),
+          const SizedBox(width: 2),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: fgColor,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -7,7 +7,7 @@ import '../../../core/sync/transports/sync_transport.dart';
 import '../../../core/sync/transports/webdav_transport.dart';
 import '../../../core/sync/transports/cos_transport.dart';
 import '../../../core/sync/transports/oss_transport.dart';
-import '../../../core/sync/sync_service.dart';
+import '../../../core/sync/models/sync_result.dart';
 import '../../../shared/theme/theme_provider.dart';
 import '../providers/cloud_sync_provider.dart';
 
@@ -529,6 +529,27 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     if (transport == null) return;
 
     _saveCredentials();
+
+    // 检查本地未同步变更数量
+    final syncDao = ref.read(syncDaoProvider);
+    final deviceId = await syncDao.getDeviceIdOrNull() ?? 'unknown';
+    final pendingCount = (await syncDao.getPendingChanges(deviceId)).length;
+
+    if (pendingCount > 0 && mounted) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('确认同步'),
+          content: Text('本地有 $pendingCount 条变更待同步到云端，是否继续？'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('立即同步')),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
     setState(() => _syncing = true);
 
     try {
@@ -539,7 +560,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
         _lastSyncAt = DateTime.now().toIso8601String();
       });
       _saveSetting('cloud.lastSyncAt', _lastSyncAt);
-      _showResultDialog(result);
+      _showSyncResultDialog(result, pendingCount);
     } catch (e) {
       setState(() => _syncing = false);
       _showSnackBar('同步出错: $e');
@@ -781,12 +802,9 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
         }
       }
 
-      setState(() {
-        _syncing = false;
-        _lastSyncAt = DateTime.now().toIso8601String();
-      });
-      _saveSetting('cloud.lastSyncAt', _lastSyncAt);
+      setState(() => _syncing = false);
 
+      // 全量下载后数据库已替换，不写入 lastSyncAt（连接已关闭），直接提示重启
       if (result.success && mounted) {
         _showRestartDialog('全量下载成功，共 ${result.dealCount ?? '?'} 条记录');
       } else {
@@ -837,6 +855,35 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(result.success ? '完成' : '失败'),
         content: Text(result.message ?? ''),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('确定')),
+        ],
+      ),
+    );
+  }
+
+  void _showSyncResultDialog(SyncResult result, int pendingCount) {
+    final buffer = StringBuffer();
+    buffer.writeln(result.message ?? '');
+    if (result.pushedZipName != null) {
+      buffer.writeln();
+      buffer.writeln('推送ZIP: ${result.pushedZipName}');
+    }
+    if (result.syncCloudSummary != null) {
+      buffer.writeln();
+      buffer.writeln('synccloud.json:');
+      buffer.writeln(result.syncCloudSummary);
+    }
+    if (pendingCount > 0 && result.pushedZipName == null) {
+      buffer.writeln();
+      buffer.writeln('本次未产生推送（可能拉取后无本地变更）');
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(result.success ? '完成' : '失败'),
+        content: SelectableText(buffer.toString()),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('确定')),
         ],

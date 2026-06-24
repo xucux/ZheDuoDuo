@@ -20,7 +20,7 @@ import '../database/daos/deal_dao.dart';
 import '../database/daos/sync_dao.dart';
 import 'transports/sync_transport.dart';
 import 'incremental_sync_service.dart';
-import 'models/sync_result.dart' as incremental;
+import 'models/sync_result.dart';
 
 /// 同步进度信息
 class SyncProgress {
@@ -32,28 +32,6 @@ class SyncProgress {
   final String? message;
 
   const SyncProgress({required this.phase, required this.progress, this.message});
-}
-
-/// 同步操作结果
-class SyncResult {
-  /// 是否成功
-  final bool success;
-  /// 结果描述
-  final String? message;
-  /// 文件大小（字节）
-  final int? fileSize;
-  /// 涉及的优惠数量
-  final int? dealCount;
-  /// 变更条数
-  final int? changeCount;
-
-  const SyncResult.success({this.message, this.fileSize, this.dealCount, this.changeCount}) : success = true;
-
-  const SyncResult.failure(this.message)
-      : success = false,
-        fileSize = null,
-        dealCount = null,
-        changeCount = null;
 }
 
 /// 云同步服务
@@ -115,7 +93,12 @@ class SyncService {
           dirPrefix: dirPrefix,
         );
         if (result.isSuccess) {
-          return SyncResult.success(message: result.message, changeCount: result.changeCount);
+          return SyncResult.success(
+            message: result.message,
+            changeCount: result.changeCount,
+            pushedZipName: result.pushedZipName,
+            syncCloudSummary: result.syncCloudSummary,
+          );
         } else if (result.isConflict) {
           return SyncResult.failure(result.message ?? '版本冲突');
         } else if (result.isNoChanges) {
@@ -157,6 +140,7 @@ class SyncService {
   Future<SyncResult> fullUpload(SyncTransport transport, {void Function(SyncProgress)? onProgress, String dirPrefix = 'zheduoduo'}) async {
     return _lock.synchronized(() async {
       try {
+        AppLogger.instance.i('[Sync] ===== 全量上传开始 =====');
         onProgress?.call(const SyncProgress(phase: 'export', progress: 0.1, message: '正在导出数据...'));
 
         final tempDir = Directory.systemTemp;
@@ -165,14 +149,21 @@ class SyncService {
         final exportResult = await _backupService.exportBackup(customPath: tempPath);
 
         if (!exportResult.success) {
+          AppLogger.instance.e('[Sync] 导出失败: ${exportResult.error}');
           return SyncResult.failure(exportResult.error ?? '导出失败');
         }
+        AppLogger.instance.i('[Sync] 导出成功: ${exportResult.dealCount} 条数据');
+
+        // 全量上传前先清空本地 changelog（避免上传过程中产生新的增量变更被遗漏）
+        await _syncDao.purgeAllChanges();
+        AppLogger.instance.i('[Sync] 已清空本地 changelog');
 
         final file = File(tempPath);
         final bytes = await file.readAsBytes();
         final remotePath = _fullBackupPath(dirPrefix: dirPrefix);
 
         onProgress?.call(SyncProgress(phase: 'upload', progress: 0.5, message: '正在上传到 $remotePath (${_formatSize(bytes.length)})...'));
+        AppLogger.instance.i('[Sync] 上传全量备份 → $remotePath (${bytes.length} bytes)');
         await transport.upload(remotePath, bytes);
 
         await file.delete();
@@ -181,16 +172,15 @@ class SyncService {
         onProgress?.call(const SyncProgress(phase: 'cleanup', progress: 0.9, message: '清理远端废弃图片...'));
         await _cleanupOrphanRemoteImages(transport, dirPrefix: dirPrefix);
 
-        // 全量上传成功后清空本地 changelog（表示其他设备以本次全量备份为基线）
-        await _syncDao.purgeAllChanges();
-
         onProgress?.call(const SyncProgress(phase: 'done', progress: 1.0, message: '上传完成'));
+        AppLogger.instance.i('[Sync] ===== 全量上传完成 =====');
         return SyncResult.success(
           message: '全量上传成功',
           fileSize: bytes.length,
           dealCount: exportResult.dealCount,
         );
       } catch (e) {
+        AppLogger.instance.e('[Sync] 全量上传失败', e);
         return SyncResult.failure('上传失败: $e');
       }
     });
@@ -245,11 +235,13 @@ class SyncService {
   }) async {
     return _lock.synchronized(() async {
       try {
+        AppLogger.instance.i('[Sync] ===== 全量下载开始 =====');
         // 检查本地是否有未同步的 changelog
         if (!force) {
           final deviceId = await getDeviceId();
           final pending = await _syncDao.getPendingChanges(deviceId);
           if (pending.isNotEmpty) {
+            AppLogger.instance.w('[Sync] 全量下载被拒绝: 本地存在 ${pending.length} 条未同步变更');
             return const SyncResult.failure('本地存在未同步的变更，请先推送或确认覆盖');
           }
         }
@@ -257,20 +249,24 @@ class SyncService {
         final String targetFile;
         if (filename != null && filename.isNotEmpty) {
           targetFile = '${_fullDir(dirPrefix: dirPrefix)}/$filename';
+          AppLogger.instance.i('[Sync] 指定下载文件: $targetFile');
         } else {
           onProgress?.call(const SyncProgress(phase: 'list', progress: 0.1, message: '查找远端全量备份...'));
           final files = await transport.list('${_fullDir(dirPrefix: dirPrefix)}/');
           if (files.isEmpty) {
+            AppLogger.instance.w('[Sync] 远端无全量备份');
             return const SyncResult.failure('远端无全量备份');
           }
 
           // 取最新: 文件名按时间排序 (zheduoduo_20250101_120000.zip)
           files.sort((a, b) => b.compareTo(a));
           targetFile = '${_fullDir(dirPrefix: dirPrefix)}/${files.first}';
+          AppLogger.instance.i('[Sync] 找到远端备份: $targetFile (共 ${files.length} 个)');
         }
 
         onProgress?.call(SyncProgress(phase: 'download', progress: 0.3, message: '正在下载 $targetFile...'));
         final bytes = await transport.download(targetFile);
+        AppLogger.instance.i('[Sync] 下载完成: ${bytes.length} bytes');
 
         onProgress?.call(SyncProgress(phase: 'import', progress: 0.6, message: '正在导入 (${_formatSize(bytes.length)})...'));
 
@@ -284,19 +280,25 @@ class SyncService {
         await file.delete();
 
         if (!importResult.success) {
+          AppLogger.instance.e('[Sync] 导入失败: ${importResult.error}');
           return SyncResult.failure(importResult.error ?? '导入失败');
         }
+        AppLogger.instance.i('[Sync] 导入成功: ${importResult.dealCount} 条数据');
 
-        // 全量下载成功后清空本地 changelog（与远端基线对齐）
-        await _syncDao.purgeAllChanges();
+        // 注意：importBackup 会替换数据库文件，导致当前数据库连接关闭。
+        // 因此此处不能执行任何数据库操作（如 purgeAllChanges、写入 lastSyncAt 等）。
+        // changelog 清理和 lastSyncAt 记录将在应用重启后由初始化逻辑完成。
 
         onProgress?.call(const SyncProgress(phase: 'done', progress: 1.0, message: '下载完成'));
+        AppLogger.instance.i('[Sync] ===== 全量下载完成 =====');
         return SyncResult.success(
-          message: '全量下载成功',
+          message: '全量下载成功，需要重启应用',
           fileSize: bytes.length,
           dealCount: importResult.dealCount,
+          needsRestart: true,
         );
       } catch (e) {
+        AppLogger.instance.e('[Sync] 全量下载失败', e);
         return SyncResult.failure('下载失败: $e');
       }
     });
@@ -304,17 +306,22 @@ class SyncService {
 
   /// 智能同步（立即同步）：增量拉取 → 增量推送
   Future<SyncResult> smartSync(SyncTransport transport, {void Function(SyncProgress)? onProgress, String dirPrefix = 'zheduoduo'}) async {
+    AppLogger.instance.i('[Sync] ===== 智能同步开始 =====');
     // 1. 增量拉取远端变更（已包含应用变更）
     onProgress?.call(const SyncProgress(phase: 'pull', progress: 0.0, message: '开始同步...'));
     final pullResult = await incrementalPull(transport, onProgress: onProgress, dirPrefix: dirPrefix);
 
     // pull 失败不一定终止（可能是远端无变更）
     if (!pullResult.success && pullResult.message != null && !pullResult.message!.contains('无增量变更')) {
+      AppLogger.instance.w('[Sync] 智能同步: 拉取阶段失败 → ${pullResult.message}');
       return pullResult;
     }
+    AppLogger.instance.i('[Sync] 智能同步: 拉取阶段完成 → ${pullResult.message}');
 
     // 2. 增量推送本地变更
-    return incrementalPush(transport, onProgress: onProgress, dirPrefix: dirPrefix);
+    final pushResult = await incrementalPush(transport, onProgress: onProgress, dirPrefix: dirPrefix);
+    AppLogger.instance.i('[Sync] ===== 智能同步完成 → ${pushResult.message} =====');
+    return pushResult;
   }
 
   /// 格式化文件大小（B / KB / MB）

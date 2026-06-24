@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../utils/logger_util.dart';
 import 'models/sync_state.dart';
 import 'transports/sync_transport.dart';
 
@@ -35,13 +36,17 @@ class SyncStateManager {
     final path = await _ensureLocalPath();
     final file = File(path);
     if (!file.existsSync()) {
+      AppLogger.instance.i('[SyncState] 本地状态文件不存在，返回空状态');
       return SyncState.empty(deviceId);
     }
     try {
       final content = await file.readAsString();
       final json = jsonDecode(content) as Map<String, dynamic>;
-      return SyncState.fromJson(json);
-    } catch (_) {
+      final state = SyncState.fromJson(json);
+      AppLogger.instance.i('[SyncState] 读取本地状态: version=${state.version}, 设备数=${state.deviceSyncLog.length}');
+      return state;
+    } catch (e) {
+      AppLogger.instance.e('[SyncState] 读取本地状态失败', e);
       return SyncState.empty(deviceId);
     }
   }
@@ -55,6 +60,7 @@ class SyncStateManager {
       dir.createSync(recursive: true);
     }
     await file.writeAsString(state.toRawJson());
+    AppLogger.instance.i('[SyncState] 写入本地状态: version=${state.version} → $path');
   }
 
   /// 读取远端同步状态（synccloud.json）
@@ -65,8 +71,11 @@ class SyncStateManager {
       final data = await transport.download(_remoteStatePath);
       final content = utf8.decode(data);
       final json = jsonDecode(content) as Map<String, dynamic>;
-      return SyncState.fromJson(json);
-    } catch (_) {
+      final state = SyncState.fromJson(json);
+      AppLogger.instance.i('[SyncState] 读取远端状态: version=${state.version}, 设备数=${state.deviceSyncLog.length}');
+      return state;
+    } catch (e) {
+      AppLogger.instance.w('[SyncState] 读取远端状态失败 (可能首次同步): $_remoteStatePath');
       return null;
     }
   }
@@ -80,13 +89,16 @@ class SyncStateManager {
       if (expected != null) {
         final remote = await readRemoteState();
         if (remote != null && remote.version != expected.version) {
+          AppLogger.instance.w('[SyncState] 乐观锁冲突: 期望version=${expected.version}, 实际version=${remote.version}');
           return false; // 版本冲突
         }
       }
       final bytes = Uint8List.fromList(utf8.encode(state.toRawJson()));
       await transport.upload(_remoteStatePath, bytes);
+      AppLogger.instance.i('[SyncState] 写入远端状态成功: version=${state.version}');
       return true;
-    } catch (_) {
+    } catch (e) {
+      AppLogger.instance.e('[SyncState] 写入远端状态失败', e);
       return false;
     }
   }

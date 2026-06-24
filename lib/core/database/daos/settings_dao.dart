@@ -40,10 +40,26 @@ class SettingsDao extends DatabaseAccessor<AppDatabase> with _$SettingsDaoMixin 
     await _changeLogger?.logSetting(key, 'upsert', payload: {'value': value});
   }
 
+  /// 静默设置（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> setValueSilent(String key, String value) async {
+    await into(appSettings).insertOnConflictUpdate(
+      AppSetting(
+        key: key,
+        value: value,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
   /// Remove a setting
   Future<void> removeValue(String key) async {
     await (delete(appSettings)..where((t) => t.key.equals(key))).go();
     await _changeLogger?.logSetting(key, 'delete');
+  }
+
+  /// 静默删除（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> removeValueSilent(String key) async {
+    await (delete(appSettings)..where((t) => t.key.equals(key))).go();
   }
 
   /// Watch a setting value

@@ -470,7 +470,7 @@ createApp({
     // MCP 内置工具配置
     const mcpTools = ref([
       { toolId: 'ocr_recognize', name: 'OCR 文字识别', functionName: 'ocr_recognize', description: '识别图片中的文字内容（Google ML Kit）', enabled: true },
-      { toolId: 'screenshot_parser_add_deal', name: '商品截图解析', functionName: 'screenshot_parser_add_deal', description: '解析商品截图信息并新增折扣记录', enabled: true },
+      { toolId: 'add_deal', name: '商品截图解析', functionName: 'add_deal', description: '解析商品截图信息并新增折扣记录', enabled: true },
       { toolId: 'deals_query', name: '折扣信息查询', functionName: 'deals_query', description: '查询折扣信息列表，支持平台、分类、关键词模糊搜索、价格范围、时间范围筛选和排序', enabled: true },
       { toolId: 'deals_aggregate', name: '折扣信息聚合统计', functionName: 'deals_aggregate', description: '聚合统计折扣信息，支持计数、求和、平均值、最小值、最大值等汇总方式', enabled: true },
       { toolId: 'deals_group', name: '折扣信息分组查询', functionName: 'deals_group', description: '分组查询折扣信息列表，支持按平台、分类、月份、年份分组统计', enabled: true },

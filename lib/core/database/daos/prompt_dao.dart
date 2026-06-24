@@ -51,6 +51,16 @@ class PromptDao extends DatabaseAccessor<AppDatabase> with _$PromptDaoMixin {
     await _changeLogger?.logPrompt(id, 'delete');
   }
 
+  /// 静默 upsert（从 Prompt 模型，不记录 changelog，用于同步服务应用远端变更）
+  Future<void> upsertFromModelSilent(Prompt prompt) async {
+    await into(prompts).insertOnConflictUpdate(prompt);
+  }
+
+  /// 静默删除（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> deletePromptSilent(String id) async {
+    await (delete(prompts)..where((t) => t.id.equals(id))).go();
+  }
+
   /// 创建新提示词，返回生成的 ID
   Future<String> createPrompt(String name, String content) async {
     final now = DateTime.now();

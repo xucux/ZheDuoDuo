@@ -188,6 +188,18 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
 
   /// Insert or update a deal with all related data
   Future<void> saveDeal(DealWithDetails dealWithDetails) async {
+    final imagePaths = await _saveDealInternal(dealWithDetails);
+    // 记录变更日志（事务外，避免影响主事务性能）
+    await _logChange(dealWithDetails.deal.id, 'upsert', imagePaths: imagePaths);
+  }
+
+  /// 静默保存优惠（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> saveDealSilent(DealWithDetails dealWithDetails) async {
+    await _saveDealInternal(dealWithDetails);
+  }
+
+  /// saveDeal 内部实现：执行事务内所有数据库操作，返回涉及的图片路径
+  Future<List<String>?> _saveDealInternal(DealWithDetails dealWithDetails) async {
     final deal = dealWithDetails.deal;
     List<String>? imagePaths;
     await transaction(() async {
@@ -256,12 +268,21 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
         }
       }
     });
-    // 记录变更日志（事务外，避免影响主事务性能）
-    await _logChange(deal.id, 'upsert', imagePaths: imagePaths);
+    return imagePaths;
   }
 
   /// Soft delete a deal (pending_delete)
   Future<void> softDeleteDeal(String id) async {
+    await _softDeleteDealInternal(id);
+    await _logChange(id, 'pending_delete');
+  }
+
+  /// 静默软删除（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> softDeleteDealSilent(String id) async {
+    await _softDeleteDealInternal(id);
+  }
+
+  Future<void> _softDeleteDealInternal(String id) async {
     final now = DateTime.now();
     final deal = await (select(deals)..where((t) => t.id.equals(id))).getSingleOrNull();
     if (deal == null) return;
@@ -284,21 +305,39 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
         ),
       );
     });
-    await _logChange(id, 'pending_delete');
   }
 
   /// Hard delete a deal
   Future<void> hardDeleteDeal(String id) async {
+    await _hardDeleteDealInternal(id);
+    await _logChange(id, 'delete');
+  }
+
+  /// 静默硬删除（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> hardDeleteDealSilent(String id) async {
+    await _hardDeleteDealInternal(id);
+  }
+
+  Future<void> _hardDeleteDealInternal(String id) async {
     await (delete(deals)..where((t) => t.id.equals(id))).go();
     await (delete(dealTags)..where((t) => t.dealId.equals(id))).go();
     await (delete(dealPromotions)..where((t) => t.dealId.equals(id))).go();
     await (delete(coupons)..where((t) => t.dealId.equals(id))).go();
     await (delete(dealImages)..where((t) => t.dealId.equals(id))).go();
-    await _logChange(id, 'delete');
   }
 
   /// Restore a soft-deleted deal
   Future<void> restoreDeal(String id) async {
+    await _restoreDealInternal(id);
+    await _logChange(id, 'upsert');
+  }
+
+  /// 静默恢复（不记录 changelog，用于同步服务应用远端变更）
+  Future<void> restoreDealSilent(String id) async {
+    await _restoreDealInternal(id);
+  }
+
+  Future<void> _restoreDealInternal(String id) async {
     final now = DateTime.now();
     await transaction(() async {
       await (update(deals)..where((t) => t.id.equals(id))).write(
@@ -317,7 +356,6 @@ class DealDao extends DatabaseAccessor<AppDatabase> with _$DealDaoMixin {
         ),
       );
     });
-    await _logChange(id, 'upsert');
   }
 
   /// Get all unique platforms

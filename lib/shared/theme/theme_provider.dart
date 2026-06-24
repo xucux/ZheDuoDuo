@@ -91,8 +91,12 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
     }
   }
 
-  Future<void> setThemeMode(ThemeMode mode) async {
+  Future<void> setThemeMode(ThemeMode mode, {bool silent = false}) async {
     state = mode;
-    await _dao.setValue('themeMode', mode.index.toString());
+    if (silent) {
+      await _dao.setValueSilent('themeMode', mode.index.toString());
+    } else {
+      await _dao.setValue('themeMode', mode.index.toString());
+    }
   }
 }
